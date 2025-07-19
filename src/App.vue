@@ -46,6 +46,9 @@
   >
     🗑️ Drag Items here to delete Them
   </div>
+  <pre class="text-xs overflow-auto mt-4 bg-white p-2 border max-h-64">
+    {{ JSON.stringify(droppedContainers, null, 2) }}
+  </pre>
 </template>
 
 <script setup>
@@ -67,43 +70,45 @@
   const rowCount = ref(1)
   const fieldCount = ref(1)
 
-  function onDragStart(item, parentId = null) {
-    const isFresh = parentId === null;
+function onDragStart(item, parentId = null) {
+  const dragSourceType = item.type || (item.name === "Field" ? "field" : item.name === "Container" ? "container" : "row");
+  dragType = dragSourceType;
 
-    dragType = item.type || (item.name === "Field" ? "field" :
-              item.name === "Container" ? "container" : "row");
-
-    if(dragType === 'field') {
-      draggedItem = isFresh ? { name : item.name, type : 'field' } : { ...item };
-      originalRowId = parentId;
-      originalParentId = null;
+  if (dragSourceType === 'field') {
+    draggedItem = { ...item };
+    if (!draggedItem.dropId) {
+      draggedItem.dropId = Date.now() + Math.random();
     }
-    else if(dragType === 'row') {
-      draggedItem = isFresh ? { name : item.name, type : 'row' } : { ...item };
-      originalParentId = parentId;
-      originalRowId = null;
+    originalRowId = parentId;
+  } else if (dragSourceType === 'row') {
+    draggedItem = { ...item };
+    if (!draggedItem.dropId) {
+      draggedItem.dropId = Date.now() + Math.random();
     }
-    else if(dragType === 'container') {
-      draggedItem = { ...item };
-      originalParentId = null;
-      originalRowId = null;
+    originalParentId = parentId;
+  } else if (dragSourceType === 'container') {
+    draggedItem = { ...item };
+    if (!draggedItem.dropId) {
+      draggedItem.dropId = Date.now() + Math.random();
     }
-
-    console.log("Drag Start:", draggedItem, "Type:", dragType, "From:", originalParentId);
   }
+
+  console.log("Drag Start:", draggedItem, "Type:", dragType);
+}
 
   function onDropRoot() {
     if (dragType === 'container' && draggedItem) 
     {
       containerCount.value++;
-      droppedContainers.value.push({
-        name: `Container${containerCount.value}`,
-        dropId: Date.now() + Math.random(),
-        children: []
-      });
+      draggedItem.dropId = Date.now() + Math.random(); // <-- Add this
+      draggedItem.name = `Container${containerCount.value}`; // Naming consistency
+      draggedItem.children = [];
+
+      droppedContainers.value.push(draggedItem);
       draggedItem = null;
       dragType = null;
       originalParentId = null;
+      originalRowId= null;
     }
   }
 
@@ -116,19 +121,24 @@
     } else if (dragType === 'container') {
       onDropToSwapContainer(containerId);
     }
+    else {
+      console.warn('Dropped an unsupported item on a container');
+    }
+    event.preventDefault();
   }
 
   function onDropToContainer(containerId) {
     const targetContainer = droppedContainers.value.find(c => c.dropId === containerId);
     if (!targetContainer || dragType !== "row") return;
 
-    const isFresh = !draggedItem.dropId;
+    const isFresh = draggedItem?.type === 'row' && draggedItem?.id !== undefined;
 
     if (isFresh) {
       // Fresh row — assign identity
       draggedItem = {
         name: `Row${rowCount.value}`,
         dropId: Date.now() + Math.random(),
+        type: 'row',
         fields: []
       };
       rowCount.value++;
@@ -148,6 +158,7 @@
     draggedItem = null;
     dragType = null;
     originalParentId = null;
+    originalRowId = null;
   }
 
   function onDropToSwapContainer(targetContainerId)
@@ -168,6 +179,7 @@
     draggedItem = null;
     dragType = null;
     originalParentId = null;
+    originalRowId = null;
   }
 
   function onDropToRow(targetRowId) {
@@ -211,6 +223,7 @@
     draggedItem = null;
     dragType = null;
     originalRowId = null;
+    originalParentId = null;
   }
 
   function onDropToDelete()
@@ -234,6 +247,12 @@
           row.fields = row.fields.filter(field => field.dropId !== draggedItem.dropId);
         }
       }
+    }
+
+    if (dragType === 'container' && draggedItem?.dropId) {
+      droppedContainers.value = droppedContainers.value.filter(
+        c => c.dropId !== draggedItem.dropId
+      );
     }
 
     // Cleanup
