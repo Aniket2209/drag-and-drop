@@ -20,7 +20,7 @@
           {{ container.name }}
             <div v-for ="child in container.children" :key="child.dropId" class="bg-teal-200 p-2 rounded cursor-move"
             :draggable="dragType !== 'field'"
-            @dragstart="() => onDragStart(child, container.dropId)"
+            @dragstart="(e) => { e.stopPropagation(); onDragStart(child, container.dropId); }"
             @dragover.prevent
             @drop="event => onDropToRow(child.dropId)"
             >
@@ -70,62 +70,66 @@
   const rowCount = ref(1)
   const fieldCount = ref(1)
 
-function onDragStart(item, parentId = null) {
-  const dragSourceType = item.type || (item.name === "Field" ? "field" : item.name === "Container" ? "container" : "row");
-  dragType = dragSourceType;
+  function onDragStart(item, parentId = null) {
+  // Explicitly assign drag type
+    dragType = item.type;
 
-  if (dragSourceType === 'field') {
+    const isFreshItem = item.hasOwnProperty('id');
     draggedItem = { ...item };
+
+    // Ensure dropId exists once — don’t overwrite
     if (!draggedItem.dropId) {
       draggedItem.dropId = Date.now() + Math.random();
     }
-    originalRowId = parentId;
-  } else if (dragSourceType === 'row') {
-    draggedItem = { ...item };
-    if (!draggedItem.dropId) {
-      draggedItem.dropId = Date.now() + Math.random();
+
+    draggedItem._fresh = isFreshItem;
+
+    // Reset both parent IDs to avoid leakage
+    originalParentId = null;
+    originalRowId = null;
+
+    // Track source origin
+    if (dragType === 'field') {
+      originalRowId = parentId;
+    } else if (dragType === 'row') {
+      originalParentId = parentId;
     }
-    originalParentId = parentId;
-  } else if (dragSourceType === 'container') {
-    draggedItem = { ...item };
-    if (!draggedItem.dropId) {
-      draggedItem.dropId = Date.now() + Math.random();
-    }
+
+    console.log("Drag Start:", draggedItem, "Type:", dragType);
   }
 
-  console.log("Drag Start:", draggedItem, "Type:", dragType);
-}
-
   function onDropRoot() {
-    if (dragType === 'container' && draggedItem) 
-    {
+    if(dragType === 'container' && draggedItem && draggedItem._fresh) {
       containerCount.value++;
-      draggedItem.dropId = Date.now() + Math.random(); // <-- Add this
-      draggedItem.name = `Container${containerCount.value}`; // Naming consistency
+      draggedItem.name = `Container${containerCount.value}`;
       draggedItem.children = [];
-
       droppedContainers.value.push(draggedItem);
-      draggedItem = null;
-      dragType = null;
-      originalParentId = null;
-      originalRowId= null;
     }
+    else {
+      console.warn("Ignored container drop in blank space not fresh");
+    }
+    draggedItem = null;
+    dragType = null;
+    originalParentId = null;
+    originalRowId= null;
   }
 
   function onDropToContainerOrSwap(containerId, event)
   {
-    if (!draggedItem || !dragType) return;
+    if (!draggedItem || !dragType || !draggedItem.type) return;
 
-    if (dragType === 'row') {
+    if (dragType === 'row' && draggedItem.type === 'row') {
       onDropToContainer(containerId);
-    } else if (dragType === 'container') {
+    } 
+    else if (dragType === 'container' && draggedItem.type === 'container') {
       onDropToSwapContainer(containerId);
-    }
+    } 
     else {
-      console.warn('Dropped an unsupported item on a container');
+      console.warn(`Dropped ${dragType} with mismatched type:`, draggedItem);
     }
     event.preventDefault();
   }
+
 
   function onDropToContainer(containerId) {
     const targetContainer = droppedContainers.value.find(c => c.dropId === containerId);
@@ -249,7 +253,7 @@ function onDragStart(item, parentId = null) {
       }
     }
 
-    if (dragType === 'container' && draggedItem?.dropId) {
+    if (dragType === 'container' && draggedItem?.type === 'container') {
       droppedContainers.value = droppedContainers.value.filter(
         c => c.dropId !== draggedItem.dropId
       );
