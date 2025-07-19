@@ -99,7 +99,7 @@
   }
 
   function onDropRoot() {
-    if(dragType === 'container' && draggedItem && draggedItem._fresh) {
+    if(dragType === 'container' && draggedItem && draggedItem._fresh && !droppedContainers.value.some(c => c.dropId === draggedItem.dropId)) {
       containerCount.value++;
       draggedItem.name = `Container${containerCount.value}`;
       draggedItem.children = [];
