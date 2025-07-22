@@ -28,13 +28,13 @@
           <div v-else @dblclick="editingContainerId = container.dropId">
             {{ container.name }}
           </div>
-            <div v-for ="child in container.children" :key="child.dropId" class="bg-teal-200 p-2 rounded cursor-move"
+            <div v-for ="child in container.children" :key="child.dropId" class="bg-teal-200 p-2 rounded cursor-move min-h-[40px]"
             :draggable="dragType !== 'field'"
             @dragstart="(e) => { e.stopPropagation(); onDragStart(child, container.dropId); }"
             @dragover.prevent
             @drop="event => onDropToRow(child.dropId)"
             >
-              {{ child.name }}
+              {{  }}
               <div class="flex flex-wrap gap-1">
                 <div v-for = "field in child.fields" :key= "field.dropId" :style = "{ width: `calc(${100 / child.fields.length}% - 0.5rem)` }" class="bg-yellow-200 p-2 rounded cursor-move"
                 draggable = "true"
