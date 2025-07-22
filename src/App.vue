@@ -17,7 +17,17 @@
         @dragover.prevent
         @drop="event => onDropToContainerOrSwap(container.dropId, event)"
         >
-          {{ container.name }}
+          <div v-if="editingContainerId === container.dropId">
+            <input
+              v-model="container.name"
+              @blur="editingContainerId = null"
+              class="border border-gray-400 rounded px-2 py-1 text-sm w-full"
+              autofocus
+            />
+          </div>
+          <div v-else @dblclick="editingContainerId = container.dropId">
+            {{ container.name }}
+          </div>
             <div v-for ="child in container.children" :key="child.dropId" class="bg-teal-200 p-2 rounded cursor-move"
             :draggable="dragType !== 'field'"
             @dragstart="(e) => { e.stopPropagation(); onDragStart(child, container.dropId); }"
@@ -304,4 +314,6 @@
 
     return "dxTextBox";
   }
+
+  const editingContainerId = ref(null);
 </script>
