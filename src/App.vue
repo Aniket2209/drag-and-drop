@@ -36,12 +36,13 @@
             >
               {{  }}
               <div class="flex flex-wrap gap-1">
-                <div v-for = "field in child.fields" :key= "field.dropId" :style = "{ width: `calc(${100 / child.fields.length}% - 0.5rem)` }" class="bg-yellow-200 p-2 rounded cursor-move"
+                <div v-for = "field in child.fields" :key= "field.dropId" :style = "{ width: `calc(${100 / child.fields.length}% - 0.5rem)` }" class="p-2 rounded cursor-move"
+                :class="field.type === 'empty' ? 'bg-white border border-dashed text-gray-400 italic' : 'bg-yellow-200'"
                 draggable = "true"
                 @dragstart="(e) => { e.stopPropagation(); onDragStart(field, child.dropId); }"
                 @dragover.prevent
                 >
-                  {{ field.name }}
+                  {{ field.type === 'empty' ? '| |' : field.name }}
                 </div>
               </div>
             </div>
@@ -67,7 +68,8 @@
   const items = ref([
     { id: 1, name: 'Row' , type: "row"},
     { id: 2, name: 'Container' , type: "container"},
-    { id: 3, name: 'Field' , type: "field"}
+    { id: 3, name: 'Field' , type: "field"},
+    { id: 4, name: '| | Empty Slot' , type: "empty"}
   ]);
   const droppedContainers = ref([]);
 
@@ -197,7 +199,7 @@
   }
 
   function onDropToRow(targetRowId) {
-    if (dragType !== 'field') return;
+    if (dragType !== 'field' && dragType !== 'empty') return;
 
     const targetContainer = droppedContainers.value.find(container =>
       container.children.some(row => row.dropId === targetRowId)
@@ -222,9 +224,9 @@
     }
     else {
       const newField = {
-        name: `Field${fieldCount.value}`,
+        name: dragType === 'empty' ? "| |" : `Field${fieldCount.value}`,
         dropId: Date.now() + Math.random(),
-        type: 'field'
+        type: dragType
       };
       fieldCount.value++;
       targetRow.fields.push(newField);
@@ -284,16 +286,26 @@
         itemType: "group",
         colCount: 2,
         items: container.children.flatMap(row =>
-          row.fields.map(field => ({
-            datafield: field.name || "unknown_field",
-            editorType: inferEditorType(field.name),
-            label: {
-              text: formatLabel(field.name)
+          row.fields.map(field => {
+            if (field.type === "empty") {
+              return {
+                itemType: "empty",
+                label: {
+                  text: "| |"
+                }
+              };
             }
-          }))
+            return {
+              dataField: field.name || "unknown_field",
+              editorType: inferEditorType(field.name),
+              label: {
+                text: formatLabel(field.name)
+              }
+            };
+          })
         )
-      }))
-    })
+      }));
+    });
 
   function formatLabel(name) {
     // Convert camelCase or snake_case to Title Case
