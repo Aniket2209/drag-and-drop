@@ -1,8 +1,23 @@
 <template>
+  <div class="w-1/2 p-4 border border-blue-300 rounded mt-4">
+    <h2 class="font-bold mb-2">Load Custom Fields (JSON)</h2>
+    <textarea
+      v-model="jsonInput"
+      rows="5"
+      class="w-full border rounded p-2 text-sm font-mono"
+      placeholder='[{"dataField": "employee_name", "editorType": "Relate", "label": { "text": "Employee" }}]'
+    ></textarea>
+    <button
+      @click="loadCustomFields"
+      class="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded text-sm"
+    >
+      Submit
+    </button>
+  </div>
   <div class="flex relative gap-8">
     <div class="w-1/2 p-4 border border-blue-300 p-4 rounded">
       <h2 class="font-bold mb-2">Draggable Items</h2>
-      <div v-for="item in items" :key = "item.id" class="p-2 mb-2 bg-blue-300 cursor-move rounded"
+      <div v-for="item in [...items, ...dynamicFields.filter(f => !f.used)]" :key = "item.id" class="p-2 mb-2 bg-blue-300 cursor-move rounded"
         draggable = "true" @dragstart="onDragStart(item)"
         >
         {{ item.name }}
@@ -231,6 +246,9 @@
       fieldCount.value++;
       targetRow.fields.push(newField);
     }
+
+    const matchingDynamic = dynamicFields.value.find(f => f.id === draggedItem.id);
+    if (matchingDynamic) matchingDynamic.used = true;
     
     console.log(draggedItem);
     console.log(originalRowId);
@@ -328,4 +346,40 @@
   }
 
   const editingContainerId = ref(null);
+  const jsonInput = ref('');
+  const dynamicFields = ref([]);
+
+  function loadCustomFields() {
+    try {
+      const parsed = JSON.parse(jsonInput.value);
+
+      const newFields = extractFieldsFromJSON(parsed);
+      dynamicFields.value.push(...newFields);
+      jsonInput.value = '';
+    } catch (e) {
+      alert("Invalid JSON format.");
+    }
+  }
+
+  function extractFieldsFromJSON(groups) {
+    const fields = [];
+
+    groups.forEach(group => {
+      if (Array.isArray(group.items)) {
+        group.items.forEach(item => {
+          if (item.itemType === 'empty') return;
+
+          fields.push({
+            id: Date.now() + Math.random(),
+            name: item.label?.text || item.dataField || "Unnamed Field",
+            type: 'field',
+            dataField: item.dataField,
+            editorType: item.editorType,
+            used: false
+          });
+        });
+      }
+    });
+    return fields;
+  }
 </script>
