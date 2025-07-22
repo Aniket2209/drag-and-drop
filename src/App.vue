@@ -47,12 +47,12 @@
     🗑️ Drag Items here to delete Them
   </div>
   <pre class="text-xs overflow-auto mt-4 bg-white p-2 border max-h-64">
-    {{ JSON.stringify(droppedContainers, null, 2) }}
+    {{ JSON.stringify(formattedJSON, null, 2) }}
   </pre>
 </template>
 
 <script setup>
-  import { ref } from 'vue';
+  import { ref, computed } from 'vue';
 
   const items = ref([
     { id: 1, name: 'Row' , type: "row"},
@@ -264,5 +264,44 @@
     dragType = null;
     originalParentId = null;
     originalRowId = null;
+  }
+
+  const formattedJSON = computed(() =>
+  {
+    return droppedContainers.value.map(container =>
+      ({
+        name: container.name || "Untitled Group",
+        itemType: "group",
+        colCount: 2,
+        items: container.children.flatMap(row =>
+          row.fields.map(field => ({
+            datafield: field.name || "unknown_field",
+            editorType: inferEditorType(field.name),
+            label: {
+              text: formatLabel(field.name)
+            }
+          }))
+        )
+      }))
+    })
+
+  function formatLabel(name) {
+    // Convert camelCase or snake_case to Title Case
+    return name
+      .replace(/[_\-]/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/\b\w/g, l => l.toUpperCase());
+  }
+
+  function inferEditorType(fieldName) {
+    if (!fieldName) return "dxTextBox";
+
+    const lower = fieldName.toLowerCase();
+    if (lower.includes("date")) return "dxDateBox";
+    if (lower.includes("time")) return "Datetime";
+    if (lower.includes("status") || lower.includes("type")) return "dxSelectBox";
+    if (lower.startsWith("rlt_") || lower.includes("employee")) return "Relate";
+
+    return "dxTextBox";
   }
 </script>
