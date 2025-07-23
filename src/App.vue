@@ -224,13 +224,41 @@
       targetRow.fields.push(draggedItem)
     }
     else {
-      const newField = {
-        name: dragType === 'empty' ? "| |" : `Field${fieldCount.value}`,
-        dropId: Date.now() + Math.random(),
-        type: dragType
-      };
-      fieldCount.value++;
-      targetRow.fields.push(newField);
+      if (draggedItem.dropId && originalRowId !== null) {
+        // Move existing field from one row to another
+        const originalContainer = droppedContainers.value.find(container =>
+          container.children.some(row => row.dropId === originalRowId)
+        );
+        if (originalContainer) {
+          const originalRow = originalContainer.children.find(row => row.dropId === originalRowId);
+          if (originalRow) {
+            originalRow.fields = originalRow.fields.filter(field => field.dropId !== draggedItem.dropId);
+          }
+        }
+        targetRow.fields.push(draggedItem);
+      } 
+      else if (draggedItem?.id) {
+        // Dragging from dynamic fields (preserve field)
+        const newField = {
+          ...draggedItem,
+          dropId: Date.now() + Math.random(),  // Give it a unique ID
+          used: true
+        };
+        targetRow.fields.push(newField);
+
+        const matchingDynamic = dynamicFields.value.find(f => f.id === draggedItem.id);
+        if (matchingDynamic) matchingDynamic.used = true;
+      } 
+      else {
+        // Regular default fields
+        const newField = {
+          name: dragType === 'empty' ? "| |" : `Field${fieldCount.value}`,
+          dropId: Date.now() + Math.random(),
+          type: dragType
+        };
+        fieldCount.value++;
+        targetRow.fields.push(newField);
+      }
     }
 
     const matchingDynamic = dynamicFields.value.find(f => f.id === draggedItem.id);
