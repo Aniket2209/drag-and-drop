@@ -42,7 +42,12 @@
                 @dragstart="(e) => { e.stopPropagation(); onDragStart(field, child.dropId); }"
                 @dragover.prevent
                 >
+                <span
+                  class="block truncate"
+                  :title="field.name"
+                  >
                   {{ field.type === 'empty' ? '| |' : field.name }}
+                </span>
                 </div>
               </div>
             </div>
