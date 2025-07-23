@@ -1,0 +1,161 @@
+[
+    {
+        "name": "Basic",
+        "itemType": "group",
+        "colCount": 2,
+        "items": [
+            {
+                "dataField": "rlt_employee_attendance",
+                "editorType": "Relate",
+                "label": {
+                    "text": "Employee"
+                }
+            },
+            {
+                "dataField": "attendance_date",
+                "editorType": "dxDateBox",
+                "label": {
+                    "text": "Attendance Date"
+                }
+            },
+            {
+                "dataField": "in_time",
+                "editorType": "Datetime",
+                "label": {
+                    "text": "In Time"
+                }
+            },
+            {
+                "dataField": "out_time",
+                "editorType": "Datetime",
+                "label": {
+                    "text": "Out Time"
+                }
+            },
+            {
+                "dataField": "in_status",
+                "editorType": "dxSelectBox",
+                "label": {
+                    "text": "In Status"
+                }
+            },
+            {
+                "itemType": "empty",
+                "label": {
+                    "text": "| |"
+                }
+            },
+            {
+                "dataField": "out_status",
+                "editorType": "dxSelectBox",
+                "label": {
+                    "text": "Out Status"
+                }
+            },
+            {
+                "dataField": "late_status",
+                "editorType": "dxCheckBox",
+                "label": {
+                    "text": "Late Status"
+                }
+            },
+            {
+                "dataField": "attendance_status_employee",
+                "editorType": "dxSelectBox",
+                "label": {
+                    "text": "Attendance Status Employee"
+                }
+            },
+            {
+                "dataField": "attendance_status_employer",
+                "editorType": "dxSelectBox",
+                "label": {
+                    "text": "Attendance Status Employer"
+                }
+            },
+            {
+                "dataField": "rlt_fld_in_device_id",
+                "editorType": "Relate",
+                "label": {
+                    "text": "In Device Id"
+                }
+            },
+            {
+                "dataField": "rlt_fld_out_device_id",
+                "editorType": "Relate",
+                "label": {
+                    "text": "Out Device Id"
+                }
+            },
+            {
+                "dataField": "in_co_ordinate",
+                "editorType": "dxTextBox",
+                "label": {
+                    "text": "In Co Ordinates"
+                }
+            },
+            {
+                "dataField": "out_co_ordinate",
+                "editorType": "dxTextBox",
+                "label": {
+                    "text": "Out Co-Ordinates"
+                }
+            },
+            {
+                "dataField": "attendance_pay_type",
+                "editorType": "dxSelectBox",
+                "label": {
+                    "text": "Attendance Pay Type"
+                }
+            },
+            {
+                "dataField": "daily_late_minute",
+                "editorType": "Integer",
+                "label": {
+                    "text": "Daily Late Minute"
+                }
+            },
+            {
+                "dataField": "quantity",
+                "editorType": "Decimal",
+                "label": {
+                    "text": "Quantity"
+                }
+            },
+            {
+                "dataField": "rlt_fld_attendance_policy",
+                "editorType": "Relate",
+                "label": {
+                    "text": "Attendance Policy"
+                }
+            },
+            {
+                "dataField": "test",
+                "editorType": "dxTextBox",
+                "label": {
+                    "text": "Test"
+                },
+                "dataType": "string",
+                "summaryType": "count"
+            },
+            {
+                "dataField": "rlt_fld_emp_name_c",
+                "editorType": "Relate",
+                "label": {
+                    "text": "Emp Name"
+                },
+                "dataType": "string",
+                "summaryType": "count"
+            },
+            {
+                "dataField": "attend_date",
+                "editorType": "dxDateBox",
+                "label": {
+                    "text": "Attend Date"
+                },
+                "dataType": "date",
+                "summaryType": "count"
+            }
+        ]
+    }
+]

@@ -1,19 +1,4 @@
 <template>
-  <div class="w-1/2 p-4 border border-blue-300 rounded mt-4">
-    <h2 class="font-bold mb-2">Load Custom Fields (JSON)</h2>
-    <textarea
-      v-model="jsonInput"
-      rows="5"
-      class="w-full border rounded p-2 text-sm font-mono"
-      placeholder='[{"dataField": "employee_name", "editorType": "Relate", "label": { "text": "Employee" }}]'
-    ></textarea>
-    <button
-      @click="loadCustomFields"
-      class="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded text-sm"
-    >
-      Submit
-    </button>
-  </div>
   <div class="flex relative gap-8">
     <div class="w-1/2 p-4 border border-blue-300 p-4 rounded">
       <h2 class="font-bold mb-2">Draggable Items</h2>
@@ -78,7 +63,8 @@
 </template>
 
 <script setup>
-  import { ref, computed } from 'vue';
+  import { ref, computed, onMounted } from 'vue';
+  import customFieldJSON from './assets/customFields.json'
 
   const items = ref([
     { id: 1, name: 'Row' , type: "row"},
@@ -346,20 +332,12 @@
   }
 
   const editingContainerId = ref(null);
-  const jsonInput = ref('');
   const dynamicFields = ref([]);
 
-  function loadCustomFields() {
-    try {
-      const parsed = JSON.parse(jsonInput.value);
-
-      const newFields = extractFieldsFromJSON(parsed);
-      dynamicFields.value.push(...newFields);
-      jsonInput.value = '';
-    } catch (e) {
-      alert("Invalid JSON format.");
-    }
-  }
+  onMounted(() => {
+    const fieldsFromFile = extractFieldsFromJSON(customFieldJSON);
+      dynamicFields.value.push(...fieldsFromFile);
+  });
 
   function extractFieldsFromJSON(groups) {
     const fields = [];
