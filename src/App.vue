@@ -76,9 +76,14 @@
       📂 Load Last Layout
     </button>
   </div>
-  <pre class="text-xs overflow-auto mt-4 bg-white p-2 border max-h-64">
-    {{ JSON.stringify(formattedJSON, null, 2) }}
-  </pre>
+  <div class="flex relative gap-8">
+    <pre class="w-1/2 text-xs overflow-auto mt-4 bg-white p-2 border max-h-64">
+      {{ JSON.stringify(formattedJSON, null, 2) }}
+    </pre>
+    <pre class="w-1/2 mt-4 bg-gray-100 p-2 text-xs overflow-x-auto">
+      {{ JSON.stringify(saved_Layout, null, 2) }}
+    </pre>
+  </div>
 </template>
 
 <script setup>
@@ -380,7 +385,7 @@
 
   const editingContainerId = ref(null);
   const dynamicFields = ref([]);
-  const STORAGE_KEY = "form_layout_structure"
+  const saved_Layout = ref(null);
 
   onMounted(() => {
     const fieldsFromFile = extractFieldsFromJSON(customFieldJSON);
@@ -411,28 +416,18 @@
 
   function saveStructure()
   {
-    const dataToSave = JSON.stringify(droppedContainers.value);
-    localStorage.setItem(STORAGE_KEY, dataToSave);
-    alert("Layout Saved Succesfully");
+    saved_Layout.value = JSON.parse(JSON.stringify(droppedContainers.value));
+    alert("Layout Saved Succesfully!");
   }
 
   function loadStructure()
   {
-    const savedData = localStorage.getItem(STORAGE_KEY);
-    if(!savedData)
+    if(!saved_Layout.value)
     {
-      alert("No Saved Layout Found!");
+      alert("No saved Layout Available!");
       return;
     }
-    try{
-      const parsed = JSON.parse(savedData);
-      droppedContainers.value = parsed;
-      alert("Layout Loaded Succesfully");
-    }
-    catch(err)
-    {
-      alert("Failed to load saved data, corrupted x(")
-      console.error(err);
-    }
+    droppedContainers.value = JSON.parse(JSON.stringify(saved_Layout.value));
+    alert("Layout Loaded Successfully!");
   }
 </script>
