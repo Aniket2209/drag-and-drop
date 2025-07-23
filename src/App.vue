@@ -62,6 +62,20 @@
   >
     🗑️ Drag Items here to delete Them
   </div>
+  <div class="flex gap-4 mt-4">
+    <button
+      @click="saveStructure"
+      class="bg-green-500 hover:bg-green-600 text-white px-4 py-1 rounded text-sm"
+    >
+      💾 Save Layout
+    </button>
+    <button
+      @click="loadStructure"
+      class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded text-sm"
+    >
+      📂 Load Last Layout
+    </button>
+  </div>
   <pre class="text-xs overflow-auto mt-4 bg-white p-2 border max-h-64">
     {{ JSON.stringify(formattedJSON, null, 2) }}
   </pre>
@@ -366,6 +380,7 @@
 
   const editingContainerId = ref(null);
   const dynamicFields = ref([]);
+  const STORAGE_KEY = "form_layout_structure"
 
   onMounted(() => {
     const fieldsFromFile = extractFieldsFromJSON(customFieldJSON);
@@ -392,5 +407,32 @@
       }
     });
     return fields;
+  }
+
+  function saveStructure()
+  {
+    const dataToSave = JSON.stringify(droppedContainers.value);
+    localStorage.setItem(STORAGE_KEY, dataToSave);
+    alert("Layout Saved Succesfully");
+  }
+
+  function loadStructure()
+  {
+    const savedData = localStorage.getItem(STORAGE_KEY);
+    if(!savedData)
+    {
+      alert("No Saved Layout Found!");
+      return;
+    }
+    try{
+      const parsed = JSON.parse(savedData);
+      droppedContainers.value = parsed;
+      alert("Layout Loaded Succesfully");
+    }
+    catch(err)
+    {
+      alert("Failed to load saved data, corrupted x(")
+      console.error(err);
+    }
   }
 </script>
