@@ -81,7 +81,7 @@
       {{ JSON.stringify(formattedJSON, null, 2) }}
     </pre>
     <pre class="w-1/2 mt-4 bg-gray-100 p-2 text-xs overflow-x-auto">
-      {{ JSON.stringify(saved_Layout, null, 2) }}
+      {{ JSON.stringify(formattedSavedLayout, null, 2) }}
     </pre>
   </div>
 </template>
@@ -260,7 +260,7 @@
           }
         }
         targetRow.fields.push(draggedItem);
-      } 
+      }
       else if (draggedItem?.id) {
         // Dragging from dynamic fields (preserve field)
         const newField = {
@@ -281,6 +281,7 @@
           type: dragType
         };
         fieldCount.value++;
+        
         targetRow.fields.push(newField);
       }
     }
@@ -335,8 +336,60 @@
   }
 
   const formattedJSON = computed(() =>
+    droppedContainers.value.map(container => ({
+    name: container.name || "Untitled Group",
+    itemType: "group",
+    colCount: container.children.length || 1,
+    items: container.children.map(row => ({
+      itemType: "group",
+      colCount: row.fields.length || 1,
+      items: row.fields.map(field => {
+        if (field.type === "empty") {
+          return {
+            itemType: "empty",
+            label: {
+              text: "| |"
+            }
+          };
+        }
+        return {
+          dataField: field.name || "unknown_field",
+          editorType: field.editorType || inferEditorType(field.name),
+          label: {
+            text: formatLabel(field.name)
+          }
+        };
+      })
+    }))
+  }))
+  );
+
+  function formatLabel(name) {
+    // Convert camelCase or snake_case to Title Case
+    return name
+      .replace(/[_\-]/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/\b\w/g, l => l.toUpperCase());
+  }
+
+  function inferEditorType(fieldName) {
+    if (!fieldName) return "dxTextBox";
+
+    const lower = fieldName.toLowerCase();
+    if (lower.includes("date")) return "dxDateBox";
+    if (lower.includes("time")) return "Datetime";
+    if (lower.includes("status") || lower.includes("type")) return "dxSelectBox";
+    if (lower.startsWith("rlt_") || lower.includes("employee")) return "Relate";
+
+    return "dxTextBox";
+  }
+
+  const editingContainerId = ref(null);
+  const dynamicFields = ref([]);
+  const saved_Layout = ref([]);
+  const formattedSavedLayout = computed(() =>
   {
-    return droppedContainers.value.map(container =>
+    return saved_Layout.value.map(container =>
       ({
         name: container.name || "Untitled Group",
         itemType: "group",
@@ -362,30 +415,6 @@
         )
       }));
     });
-
-  function formatLabel(name) {
-    // Convert camelCase or snake_case to Title Case
-    return name
-      .replace(/[_\-]/g, ' ')
-      .replace(/([a-z])([A-Z])/g, '$1 $2')
-      .replace(/\b\w/g, l => l.toUpperCase());
-  }
-
-  function inferEditorType(fieldName) {
-    if (!fieldName) return "dxTextBox";
-
-    const lower = fieldName.toLowerCase();
-    if (lower.includes("date")) return "dxDateBox";
-    if (lower.includes("time")) return "Datetime";
-    if (lower.includes("status") || lower.includes("type")) return "dxSelectBox";
-    if (lower.startsWith("rlt_") || lower.includes("employee")) return "Relate";
-
-    return "dxTextBox";
-  }
-
-  const editingContainerId = ref(null);
-  const dynamicFields = ref([]);
-  const saved_Layout = ref(null);
 
   onMounted(() => {
     const fieldsFromFile = extractFieldsFromJSON(customFieldJSON);
