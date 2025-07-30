@@ -1,6 +1,6 @@
 <template>
   <div class="flex relative gap-8">
-    <div class="w-1/2 p-4 border border-blue-300 p-4 rounded">
+    <div class="flex-1 p-4 border border-blue-300 rounded">
       <h2 class="font-bold mb-2">Draggable Items</h2>
       <div v-for="item in [...items, ...dynamicFields.filter(f => !f.used)]" :key = "item.id" class="p-2 mb-2 bg-blue-300 cursor-move rounded"
         draggable = "true" @dragstart="onDragStart(item)"
@@ -8,7 +8,7 @@
         {{ item.name }}
       </div>
     </div>
-    <div class="w-1/2 p-4 border border-green-400 p-4 rounded"
+    <div class="flex-1 p-4 border border-green-400 rounded"
     @dragover.prevent @drop="onDropRoot">
       <h2 class="font-bold mb-2">Drop Zone</h2>
         <div v-for = "container in droppedContainers" :key = "container.dropId" class="p-2 mb-2 bg-green-300 rounded"
@@ -53,14 +53,13 @@
             </div>
         </div>
       </div>
-  </div>
-  <!-- Delete Zone -->
-  <div
-    class="mt-8 w-1/4 h-24 border border-red-400 bg-gray-200 flex items-center justify-center text-red-700 font-bold text-lg rounded"
-    @dragover.prevent
-    @drop="onDropToDelete()"
-  >
-    🗑️ Drag Items here to delete Them
+    <div
+      class="flex-1 min-w-32 h-96 border border-red-400 bg-gray-200 flex items-center justify-center text-red-700 font-bold text-lg rounded self-start"
+      @dragover.prevent
+      @drop="onDropToDelete()"
+    >
+      🗑️ Drag Items here to delete Them
+    </div>
   </div>
   <div class="flex gap-4 mt-4">
     <button
