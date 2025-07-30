@@ -1,5 +1,5 @@
 <template>
-  <div class="flex relative gap-8">
+  <div class="flex relative gap-4">
     <div class="flex-1 p-4 border border-blue-300 rounded">
       <h2 class="font-bold mb-2">Draggable Items</h2>
       <div v-for="item in [...items, ...dynamicFields.filter(f => !f.used)]" :key = "item.id" 
@@ -399,7 +399,7 @@
       ({
         name: container.name || "Untitled Group",
         itemType: "group",
-        colCount: 2,
+        colCount: container.children.length || 1,
         items: container.children.flatMap(row =>
           row.fields.map(field => {
             if (field.type === "empty") {
