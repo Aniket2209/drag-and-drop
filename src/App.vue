@@ -61,7 +61,7 @@
         </div>
       </div>
     <div
-      class="flex-1 min-w-32 h-96 border border-red-400 bg-gray-200 flex items-center justify-center text-red-700 font-bold text-lg rounded self-start"
+      class="flex-1 min-w-32 h-48 border border-red-400 bg-gray-200 flex items-center justify-center text-red-700 font-bold text-lg rounded self-start"
       @dragover.prevent
       @drop="onDropToDelete()"
     >
@@ -132,7 +132,7 @@
     originalRowId = null;
 
     // Track source origin
-    if (dragType === 'field') {
+    if (dragType === 'field' || dragType === 'empty') {
       originalRowId = parentId;
     } else if (dragType === 'row') {
       originalParentId = parentId;
@@ -316,7 +316,7 @@
       }
     }
 
-    if (dragType === 'field' && originalRowId !== null) {
+    if ((dragType === 'field' || dragType === 'empty') && originalRowId !== null) {
       const container = droppedContainers.value.find(c =>
         c.children.some(row => row.dropId === originalRowId)
       );
