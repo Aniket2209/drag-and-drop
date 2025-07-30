@@ -2,7 +2,14 @@
   <div class="flex relative gap-8">
     <div class="flex-1 p-4 border border-blue-300 rounded">
       <h2 class="font-bold mb-2">Draggable Items</h2>
-      <div v-for="item in [...items, ...dynamicFields.filter(f => !f.used)]" :key = "item.id" class="p-2 mb-2 bg-blue-300 cursor-move rounded"
+      <div v-for="item in [...items, ...dynamicFields.filter(f => !f.used)]" :key = "item.id" 
+        :class="[
+          'p-2 mb-2 cursor-move rounded',
+          item.type === 'container' ? 'bg-green-300' :
+          item.type === 'row' ? 'bg-teal-200' :
+          item.type === 'field' ? 'bg-yellow-200' :
+          ''
+        ]"
         draggable = "true" @dragstart="onDragStart(item)"
         >
         {{ item.name }}
