@@ -48,6 +48,7 @@
                 draggable = "true"
                 @dragstart="(e) => { e.stopPropagation(); onDragStart(field, child.dropId); }"
                 @dragover.prevent
+                @click.prevent="onFieldClick(field)"
                 >
                 <span
                   class="block truncate"
@@ -60,12 +61,65 @@
             </div>
         </div>
       </div>
-    <div
-      class="flex-1 min-w-32 h-48 border border-red-400 bg-gray-200 flex items-center justify-center text-red-700 font-bold text-lg rounded self-start"
-      @dragover.prevent
-      @drop="onDropToDelete()"
-    >
-      🗑️ Drag Items here to delete Them
+    <div class="flex-1 flex-col gap-4">
+      <div
+        class="w-full h-48 border border-red-400 bg-gray-200 flex items-center justify-center text-red-700 font-bold text-lg rounded self-start"
+        @dragover.prevent
+        @drop="onDropToDelete()"
+      >
+        🗑️ Drag Items here to delete Them
+      </div>
+      <div
+        v-if="selectedField"
+        class="p-4 border border-gray-400 rounded bg-white shadow-md max-w-sm"
+      >
+        <h3 class="font-semibold mb-2">Field Properties</h3>
+        <div class="mb-2">
+          <label class="block text-sm font-medium text-gray-700">Label:</label>
+          <input
+            type="text"
+            class="mt-1 block w-full border border-gray-300 rounded px-2 py-1"
+            v-model="selectedField.label"
+            disabled
+          />
+        </div>
+        <div class="mb-2">
+          <label class="block text-sm font-medium text-gray-700">Editor Type:</label>
+          <input
+            type="text"
+            class="mt-1 block w-full border border-gray-300 rounded px-2 py-1"
+            v-model="selectedField.editorType"
+            disabled
+          />
+        </div>
+        <div class="mb-2">
+          <label class="block text-sm font-medium text-gray-700">Width:</label>
+          <input
+            type="text"
+            placeholder="Enter width"
+            class="mt-1 block w-full border border-gray-300 rounded px-2 py-1"
+            v-model="fieldProperties.width"
+          />
+        </div>
+        <div class="flex items-center space-x-4 mt-3">
+          <label class="inline-flex items-center">
+            <input
+              type="checkbox"
+              class="form-checkbox"
+              v-model="fieldProperties.required"
+            />
+            <span class="ml-2 text-sm text-gray-700">Required</span>
+          </label>
+          <label class="inline-flex items-center">
+            <input
+              type="checkbox"
+              class="form-checkbox"
+              v-model="fieldProperties.readonly"
+            />
+            <span class="ml-2 text-sm text-gray-700">Read Only</span>
+          </label>
+        </div>
+      </div>
     </div>
   </div>
   <div class="flex gap-4 mt-4">
@@ -464,5 +518,27 @@
     }
     droppedContainers.value = JSON.parse(JSON.stringify(saved_Layout.value));
     alert("Layout Loaded Successfully!");
+  }
+
+  const selectedField = ref(null);
+  const fieldProperties = ref({
+    width: '',
+    required: false,
+    readonly: false,
+  });
+
+  function onFieldClick(field)
+  {
+    selectedField.value = {
+      ...field,
+      label: formatLabel(field.name),
+      editorType: inferEditorType(field.name)
+    };
+
+    fieldProperties.value = {
+      width: field.width || '',
+      required: !!field.required,
+      readonly: !!field.readonly,
+    };
   }
 </script>
