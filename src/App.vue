@@ -61,7 +61,7 @@
             </div>
         </div>
       </div>
-    <div class="flex-1 flex-col gap-4">
+    <div class="flex-1 flex flex-col gap-4">
       <div
         class="w-full h-48 border border-red-400 bg-gray-200 flex items-center justify-center text-red-700 font-bold text-lg rounded self-start"
         @dragover.prevent
@@ -119,6 +119,12 @@
             <span class="ml-2 text-sm text-gray-700">Read Only</span>
           </label>
         </div>
+        <button
+          @click="applyFieldProperties"
+          class="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+        >
+          Apply
+        </button>
       </div>
     </div>
   </div>
@@ -417,7 +423,10 @@
           editorType: field.editorType || inferEditorType(field.name),
           label: {
             text: formatLabel(field.name)
-          }
+          },
+          width: field.width || null,
+          required: field.required || false,
+          readonly: field.readonly || false,
         };
       })
     }))
@@ -540,5 +549,32 @@
       required: !!field.required,
       readonly: !!field.readonly,
     };
+  }
+
+  function applyFieldProperties()
+  {
+    if (!selectedField.value) return;
+    for (const container of droppedContainers.value) {
+      for (const row of container.children) {
+        const fieldIndex = row.fields.findIndex(f => f.dropId === selectedField.value.dropId);
+        if (fieldIndex !== -1) {
+          const field = row.fields[fieldIndex];
+
+          field.width = fieldProperties.value.width;
+          field.required = fieldProperties.value.required;
+          field.readonly = fieldProperties.value.readonly;
+
+          selectedField.value.width = fieldProperties.value.width;
+          selectedField.value.required = fieldProperties.value.required;
+          selectedField.value.readonly = fieldProperties.value.readonly;
+
+          alert(`Field "${field.name}" updated successfully.`);
+
+          return;
+        }
+      }
+    }
+
+    alert("Failed to update the selected field. It was not found.");
   }
 </script>
