@@ -1084,8 +1084,6 @@
       const rows = Array.isArray(container.children) ? container.children : [];
 
       return {
-        id: generateId(),
-        dropId: generateId(),
         name: container.name || `Container${ci + 1}`,
         type: "container",
         children: rows.length > 0
