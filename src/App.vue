@@ -1,5 +1,21 @@
 <template>
   <div class="flex relative gap-4">
+    <div class="type-panel flex gap-2 mb-2">
+      <button v-for="type in ['list','edit','detail']" 
+              :key="type" 
+              :class="['border px-4 py-1 rounded', selectedType===type?'bg-blue-500 text-white':'bg-gray-100']"
+              @click="selectedType=type">{{type.toUpperCase()}}
+      </button>
+    </div>
+    <div class="mb-4">
+      <label class="font-bold mr-2">Select Platform:</label>
+      <select v-model="selectedPlatform" class="border rounded px-2 py-1">
+        <option value="web">Web</option>
+        <option value="android">Android</option>
+      </select>
+    </div>
+  </div>
+  <div class="flex relative gap-4">
     <div class="flex-1 p-4 border border-blue-300 rounded">
       <h2 class="font-bold mb-2">Draggable Items</h2>
       <div v-for="item in [...items, ...dynamicFields.filter(f => !f.used)]" :key = "item.id" 
@@ -135,19 +151,20 @@
     >
       💾 Save Layout
     </button>
+    <input type="file" accept=".json" 
+       ref="fileInput" 
+       style="display: none;" 
+       @change="loadStructure" />
     <button
-      @click="loadStructure"
+      @click="$refs.fileInput.click()"
       class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded text-sm"
     >
-      📂 Load Last Layout
+      📂 Load Layout
     </button>
   </div>
-  <div class="flex relative gap-8">
+  <div class="flex relative gap-4">
     <pre class="w-1/2 text-xs overflow-auto mt-4 bg-white p-2 border max-h-64">
-      {{ JSON.stringify(formattedJSON, null, 2) }}
-    </pre>
-    <pre class="w-1/2 mt-4 bg-gray-100 p-2 text-xs overflow-x-auto">
-      {{ JSON.stringify(formattedSavedLayout, null, 2) }}
+      {{ JSON.stringify(platformBasedJSON, null, 2) }}
     </pre>
   </div>
 </template>
@@ -172,6 +189,7 @@
   const containerCount = ref(0)
   const rowCount = ref(1)
   const fieldCount = ref(1)
+  const selectedPlatform = ref('web');
 
   function onDragStart(item, parentId = null) {
   // Explicitly assign drag type
@@ -455,35 +473,6 @@
 
   const editingContainerId = ref(null);
   const dynamicFields = ref([]);
-  const saved_Layout = ref([]);
-  const formattedSavedLayout = computed(() =>
-  {
-    return saved_Layout.value.map(container =>
-      ({
-        name: container.name || "Untitled Group",
-        itemType: "group",
-        colCount: container.children.length || 1,
-        items: container.children.flatMap(row =>
-          row.fields.map(field => {
-            if (field.type === "empty") {
-              return {
-                itemType: "empty",
-                label: {
-                  text: "| |"
-                }
-              };
-            }
-            return {
-              dataField: field.name || "unknown_field",
-              editorType: inferEditorType(field.name),
-              label: {
-                text: formatLabel(field.name)
-              }
-            };
-          })
-        )
-      }));
-    });
 
   onMounted(() => {
     const fieldsFromFile = extractFieldsFromJSON(customFieldJSON);
@@ -514,19 +503,40 @@
 
   function saveStructure()
   {
-    saved_Layout.value = JSON.parse(JSON.stringify(droppedContainers.value));
-    alert("Layout Saved Succesfully!");
+    const json = generateJSON();
+    const blob = new Blob([JSON.stringify(json, null, 2)], {type: "application/json"});
+
+    const filename = `${selectedType.value}_${selectedPlatform.value}.json`;
+    if (window.navigator.msSaveOrOpenBlob) {
+      window.navigator.msSaveBlob(blob, filename);
+    } 
+    else {
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
   }
 
-  function loadStructure()
+  function loadStructure(event)
   {
-    if(!saved_Layout.value)
-    {
-      alert("No saved Layout Available!");
-      return;
-    }
-    droppedContainers.value = JSON.parse(JSON.stringify(saved_Layout.value));
-    alert("Layout Loaded Successfully!");
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        console.log("File contents:", e.target.result);
+        const json = JSON.parse(e.target.result);
+        console.log("Parsed JSON:", json, selectedType.value, selectedPlatform.value);
+        loadFromJson(json);
+        alert("Layout loaded successfully!");
+      } catch (err) {
+        alert("Invalid JSON file.");
+      }
+    };
+    reader.readAsText(file);
   }
 
   const selectedField = ref(null);
@@ -577,4 +587,555 @@
 
     alert("Failed to update the selected field. It was not found.");
   }
+
+  const platformBasedJSON = computed(() => {
+    if (selectedPlatform.value === 'web') {
+      // Your current web JSON logic, as in formattedJSON
+      return formattedJSON.value;
+    } 
+    else if (selectedPlatform.value === 'android')
+    {
+      return droppedContainers.value.map(container => ({
+        groupLabel: container.name || "Group",
+        rows: (container.children || []).map(row => ({
+          fields: (row.fields || []).map(field => ({
+            name: field.name,
+            type: mapEditorTypeToAndroid(field.editorType || inferEditorType(field.name)),
+            label: formatLabel(field.name),
+            required: !!field.required,
+            readonly: !!field.readonly,
+            width: field.width || null
+          }))
+        }))
+      }));
+    }
+    return [];
+  });
+
+  const selectedType = ref('list');
+
+  function mapEditorTypeToAndroid(editorType) {
+    switch (editorType) {
+      case 'dxTextBox':
+        return 'text';
+      case 'dxDateBox':
+        return 'date';
+      case 'dxSelectBox':
+        return 'select';
+      case 'dxCheckBox':
+        return 'checkbox';
+      // Add more as needed for your mobile UI
+      default:
+        return 'text';
+    }
+  }
+
+  function getAllFields(containers) {
+    return containers.flatMap(container =>
+      container.children.flatMap(row =>
+        row.fields
+      )
+    );
+  }
+
+  function generateListWeb(containers) {
+    // Each container becomes a 'group' with nested rows mapped as separate sub-groups
+    return containers.map((container, ci) => ({
+      name: container.name || `Container${ci + 1}`,  // preserve container name
+      itemType: "group",
+      colCount: container.children.length,
+      items: container.children.map((row, ri) => ({
+        itemType: "group",
+        colCount: row.fields.length,
+        items: row.fields.map(field => {
+          if (field.type === "empty") {
+            return {
+              itemType: "empty",
+              label: { text: "| |" }
+            };
+          }
+          return {
+            dataField: field.dataField || field.name,
+            editorType: field.editorType || "dxTextBox",
+            label: { text: field.name },
+            visible: true,
+            required: field.required || false,
+            readonly: field.readonly || false,
+            width: field.width || null,
+          };
+        })
+      }))
+    }));
+  }
+  function generateListMobile(containers) {
+    return {
+      version: "1.0.0",
+      Screen: {
+        ScreenId: "02_listView",
+        ScreenName: "List View",
+        layout: {
+          type: "ItemLayout",
+          dataKey: "userData",
+          children: containers.map(container => ({
+            type: "verticalContainer",
+            name: container.name || "Unnamed Container",
+            corner_radius: 15,
+            bgColor: "#FFEFEFEF",
+            padding: { left: 10, right: 10, top: 5, bottom: 5 },
+            children: container.children.map(row => ({
+              type: "singleRowLayout",
+              name: row.name || "Unnamed Row",
+              children: row.fields.map(field => ({
+                type:
+                  field.editorType === "dxSelectBox"
+                    ? "dropdown"
+                    : field.editorType === "dxTextBox"
+                    ? "inputText"
+                    : field.editorType === "dxTextArea"
+                    ? "inputText"
+                    : "inputText",
+                id: field.dataField || field.name,
+                keyboardType: field.editorType === "Phone" ? "number" : "text",
+                font_size: 15,
+                font_weight: "normal",
+                padding: { left: 10, right: 10 },
+                text: field.name
+              }))
+            }))
+          }))
+        }
+      }
+    };
+  }
+  function generateEditWeb(containers) {
+    return containers.map((container, ci) => ({
+      name: container.name || `Container${ci + 1}`,  // Preserve container name
+      itemType: "group",
+      colCount: container.children.length,
+      items: container.children.map((row, ri) => ({
+        itemType: "group",
+        colCount: row.fields.length,
+        items: row.fields.map(field => {
+          if (field.type === "empty") {
+            return {
+              itemType: "empty",
+              label: { text: "| |" }
+            };
+          }
+          return {
+            dataField: field.dataField || field.name,
+            editorType: field.editorType || "dxTextBox",
+            label: { text: field.name },
+            required: field.required || false,
+            readonly: field.readonly || false,
+            width: field.width || null,
+          };
+        })
+      }))
+    }));
+  }
+  function generateEditMobile(containers) {
+    return {
+      version: "1.0.0",
+      Screen: {
+        ScreenId: "03_createView",
+        ScreenName: "Create View",
+        layout: {
+          type: "singleColumnLayout",
+          padding: { top: 10 },
+          children: containers.map(container => ({
+            name: container.name || "Unnamed Container",
+            type: "verticalContainer",
+            corner_radius: 15,
+            bgColor: "#FFC5DCFF",
+            padding: { left: 10, right: 10, top: 5, bottom: 5 },
+            children: container.children.map(row => ({
+              type: "singleRowLayout",
+              children: row.fields.map(field => ({
+                type: field.editorType === 'dxSelectBox' ? "dropdown" :
+                      field.editorType === 'dxTextBox' ? "inputText" :
+                      field.editorType === 'dxTextArea' ? "inputText" : "inputText",
+                id: field.dataField || field.name,
+                keyboardType: (field.editorType === "Phone" ? "number" : "text"),
+                font_size: 15,
+                font_weight: "normal",
+                padding: { left: 10, right: 10 },
+                text: field.name
+              }))
+            }))
+          }))
+        }
+      }
+    };
+  }
+  function generateDetailWeb(containers) {
+    return containers.map((container, ci) => ({
+      name: container.name || `Container${ci + 1}`,
+      itemType: "group",
+      children: container.children.map(row => ({
+        name: row.name || "Row",
+        itemType: "group",
+        items: row.fields.map(field => {
+          if (field.type === "empty") {
+            return {
+              itemType: "empty",
+              label: { text: "| |" }
+            };
+          }
+          return {
+            dataField: field.dataField || field.name,
+            editorType: field.editorType || "dxTextBox",
+            label: { text: field.name },
+            required: field.required || false,
+            readonly: field.readonly || false,
+            width: field.width || null
+          };
+        })
+      }))
+    }));
+  }
+
+  function generateJSON()
+  {
+    if(selectedType.value==='list' && selectedPlatform.value==='web') {
+      return generateListWeb(droppedContainers.value);
+    }
+    if(selectedType.value==='list' && selectedPlatform.value==='android') {
+      return generateListMobile(droppedContainers.value);
+    }
+    if(selectedType.value==='edit' && selectedPlatform.value==='web') {
+      return generateEditWeb(droppedContainers.value);
+    }
+    if(selectedType.value==='edit' && selectedPlatform.value==='android') {
+      return generateEditMobile(droppedContainers.value);
+    }
+    if(selectedType.value==='detail' && selectedPlatform.value==='web') {
+      return generateDetailWeb(droppedContainers.value);
+    }
+    if(selectedType.value==='detail' && selectedPlatform.value==='android') {
+      return {};
+    }
+  }
+
+  function loadFromJson(json) {
+    const key = `${selectedType.value}_${selectedPlatform.value}`;
+    let parsed;
+    switch (key) {
+      case "list_web":
+        parsed = parseListWeb(json);
+        break;
+      case "list_android":
+        parsed = parseListMobile(json);
+        break;
+      case "edit_web":
+        parsed = parseEditWeb(json);
+        break;
+      case "edit_android":
+        parsed = parseEditMobile(json);
+        break;
+      case "detail_web":
+        parsed = parseDetailWeb(json);
+        break;
+      case "detail_android":
+        // Implement when ready, or clear:
+        parsed = [];
+        break;
+      default:
+        alert("Unsupported layout or file format.");
+        parsed = [];
+    }
+    droppedContainers.value = parsed;
+  }
+
+  function generateId() {
+    return Date.now() + Math.random();
+  }
+
+  function parseListWeb(json) {
+    if (!Array.isArray(json)) {
+      alert("File format error: Expected array for List Web layout.");
+      return [];
+    }
+
+    return json.map((group, gi) => ({
+      id: generateId(),
+      dropId: generateId(),
+      name: group.name || `Container${gi + 1}`,
+      type: "container",
+      children: Array.isArray(group.items) && group.items.length > 0
+        ? group.items.map((row, ri) => ({
+            id: generateId(),
+            dropId: generateId(),
+            name: `Row${ri + 1}`,
+            type: "row",
+            fields: Array.isArray(row.items)
+              ? row.items.map(field => {
+                  if (field.itemType === "empty") {
+                    return {
+                      id: generateId(),
+                      dropId: generateId(),
+                      name: "| |",
+                      type: "empty",
+                      used: true,
+                    };
+                  }
+                  return {
+                    id: generateId(),
+                    dropId: generateId(),
+                    name: field.dataField || "unknown_field",
+                    type: "field",
+                    dataField: field.dataField,
+                    editorType: field.editorType,
+                    used: true,
+                    required: field.required || false,
+                    readonly: field.readonly || false,
+                    width: field.width || null,
+                  };
+                })
+              : []
+          }))
+        : [{
+            id: generateId(),
+            dropId: generateId(),
+            name: "Row1",
+            type: "row",
+            fields: []
+          }]
+    }));
+  }
+
+  function parseListMobile(json) {
+    try {
+      const layoutChildren = json?.Screen?.layout?.children;
+      if (!Array.isArray(layoutChildren)) {
+        alert("File format error: Expected array of containers in mobile list layout.");
+        return [];
+      }
+
+      return layoutChildren.map(container => {
+        const rows = Array.isArray(container.children) ? container.children : [];
+
+        return {
+          id: generateId(),
+          dropId: generateId(),
+          name: container.name || "Unnamed Container",
+          type: "container",
+          children: rows.map((row, idx) => {
+            if (row.type !== "singleRowLayout" || !Array.isArray(row.children)) {
+              return null;
+            }
+            return {
+              id: generateId(),
+              dropId: generateId(),
+              name: row.name || `Row${idx + 1}`,
+              type: "row",
+              fields: row.children.map(field => ({
+                id: generateId(),
+                dropId: generateId(),
+                name: field.id || field.text || "unknown_field",
+                type: "field",
+                dataField: field.id || field.text || "unknown_field",
+                editorType: mapMobileTypeToEditorType(field.type),
+                used: true,
+                required: false,
+                readonly: false,
+                width: null
+              }))
+            };
+          }).filter(r => r !== null)
+        };
+      });
+    } catch (err) {
+      console.error("Error parsing list mobile layout:", err);
+      alert("Invalid JSON structure for Mobile List layout.");
+      return [];
+    }
+  }
+
+  function parseEditWeb(json) {
+    if (!Array.isArray(json)) {
+      alert("File format error: Expected array for Edit Web layout.");
+      return [];
+    }
+
+    return json.map((group, gi) => ({
+      id: generateId(),
+      dropId: generateId(),
+      name: group.name || `Container${gi + 1}`,
+      type: "container",
+      children: Array.isArray(group.items) && group.items.length > 0
+        ? group.items.map((row, ri) => ({
+            id: generateId(),
+            dropId: generateId(),
+            name: `Row${ri + 1}`,
+            type: "row",
+            fields: Array.isArray(row.items)
+              ? row.items.map(field => {
+                  if (field.itemType === "empty") {
+                    return {
+                      id: generateId(),
+                      dropId: generateId(),
+                      name: "| |",
+                      type: "empty",
+                      used: true
+                    };
+                  }
+                  return {
+                    id: generateId(),
+                    dropId: generateId(),
+                    name: field.dataField || "unknown_field",
+                    type: "field",
+                    dataField: field.dataField,
+                    editorType: field.editorType,
+                    used: true,
+                    required: field.required || false,
+                    readonly: field.readonly || false,
+                    width: field.width || null
+                  };
+                })
+              : []
+          }))
+        : [{
+            id: generateId(),
+            dropId: generateId(),
+            name: "Row1",
+            type: "row",
+            fields: []
+          }]
+    }));
+  }
+
+  function parseEditMobile(json) {
+    try {
+      // Defensive: Check structure exists
+      if (!json || !json.Screen || !json.Screen.layout || !Array.isArray(json.Screen.layout.children)) {
+        alert("Invalid mobile edit structure.");
+        return [];
+      }
+
+      // Each 'verticalContainer' in children array is mapped to a container
+      const containers = json.Screen.layout.children.map(vc => {
+        // Defensive: children could be undefined
+        const childrenArr = Array.isArray(vc.children) ? vc.children : [];
+
+        return {
+          id: generateId(),
+          dropId: generateId(),
+          name: (typeof vc.name === "string") ? vc.name : "",
+          type: "container",
+          children: childrenArr.map((row, idx) => {
+            // Each singleRowLayout in verticalContainer.children is a row
+            if (row.type !== "singleRowLayout" || !Array.isArray(row.children)) {
+              return null; // skip unexpected node
+            }
+            return {
+              id: generateId(),
+              dropId: generateId(),
+              name: "Row" + (idx + 1),
+              type: "row",
+              fields: row.children
+                .filter(field => field && (field.type === "inputText" || field.type === "dropdown"))
+                .map(field => ({
+                  id: generateId(),
+                  dropId: generateId(),
+                  name: field.id || field.text || "unknown_field",
+                  type: "field",
+                  dataField: field.id || field.text,
+                  editorType: mapMobileTypeToEditorType(field.type),
+                  used: true,
+                  required: field.isRequired || false,
+                  readonly: false,
+                  width: null,
+                })),
+            };
+          }).filter(r => !!r) // Remove nulls
+        };
+      });
+
+      return containers;
+    } catch (err) {
+      console.error("Error in parseEditMobile:", err);
+      alert("Invalid JSON structure for Android Edit layout.");
+      return [];
+    }
+  }
+
+  // Helper to map mobile field types to your editorType strings
+  function mapMobileTypeToEditorType(type) {
+    switch (type) {
+      case "inputText":
+        return "dxTextBox";
+      case "dropdown":
+        return "dxSelectBox";
+      case "inputTextArea":
+        return "dxTextArea";
+      default:
+        return "dxTextBox";
+    }
+  }
+
+  function parseDetailWeb(json) {
+    if (!Array.isArray(json)) {
+      alert("File format error: Expected array for Detail Web layout.");
+      return [];
+    }
+
+    return json.map((container, ci) => {
+      const rows = Array.isArray(container.children) ? container.children : [];
+
+      return {
+        id: generateId(),
+        dropId: generateId(),
+        name: container.name || `Container${ci + 1}`,
+        type: "container",
+        children: rows.length > 0
+          ? rows.map((row, ri) => ({
+              id: generateId(),
+              dropId: generateId(),
+              name: row.name || `Row${ri + 1}`,
+              type: "row",
+              fields: Array.isArray(row.items)
+                ? row.items.map(field => {
+                    if (field.itemType === "empty") {
+                      return {
+                        id: generateId(),
+                        dropId: generateId(),
+                        name: "| |",
+                        type: "empty",
+                        used: true
+                      };
+                    }
+                    return {
+                      id: generateId(),
+                      dropId: generateId(),
+                      name: (field.label && field.label.text) || field.dataField || "unknown_field",
+                      type: "field",
+                      dataField: field.dataField,
+                      editorType: field.editorType || "dxTextBox",
+                      used: true,
+                      required: !!field.required,
+                      readonly: !!field.readonly,
+                      width: field.width || null
+                    };
+                  })
+                : []
+            }))
+          : [{
+              id: generateId(),
+              dropId: generateId(),
+              name: "Row1",
+              type: "row",
+              fields: []
+            }]
+      };
+    });
+  }
+
+function splitIntoRows(items, size) {
+  let result = [];
+  for(let i=0; i < items.length; i += size) {
+    result.push(items.slice(i, i+size));
+  }
+  return result;
+}
 </script>
