@@ -17,7 +17,7 @@
   </div>
   <div class="flex relative gap-4">
     <div class="flex-1 p-4 border border-blue-300 rounded">
-      <h2 class="font-bold mb-2">Draggable Items</h2>
+      <h2 class="font-bold mb-2">Available Fields</h2>
       <div v-for="item in [...items, ...dynamicFields.filter(f => !f.used)]" :key = "item.id" 
         :class="[
           'p-2 mb-2 cursor-move rounded',
@@ -33,7 +33,7 @@
     </div>
     <div class="flex-1 p-4 border border-green-400 rounded"
     @dragover.prevent @drop="onDropRoot">
-      <h2 class="font-bold mb-2">Drop Zone</h2>
+      <h2 class="font-bold mb-2">Selected Fields</h2>
         <div v-for = "container in droppedContainers" :key = "container.dropId" class="p-2 mb-2 bg-green-300 rounded"
         draggable = "true"
         @dragstart = "() => onDragStart(container)"
@@ -146,20 +146,10 @@
   </div>
   <div class="flex gap-4 mt-4">
     <button
-      @click="saveStructure"
+      @click="saveAndDeploy"
       class="bg-green-500 hover:bg-green-600 text-white px-4 py-1 rounded text-sm"
     >
-      💾 Save Layout
-    </button>
-    <input type="file" accept=".json" 
-       ref="fileInput" 
-       style="display: none;" 
-       @change="loadStructure" />
-    <button
-      @click="$refs.fileInput.click()"
-      class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded text-sm"
-    >
-      📂 Load Layout
+      💾 Save and Deploy
     </button>
   </div>
   <div class="flex relative gap-4">
@@ -170,7 +160,7 @@
 </template>
 
 <script setup>
-  import { ref, computed, onMounted } from 'vue';
+  import { ref, computed, onMounted, watch } from 'vue';
   import customFieldJSON from './assets/customFields.json';
   import axios from 'axios';
 
@@ -191,6 +181,7 @@
   const rowCount = ref(1)
   const fieldCount = ref(1)
   const selectedPlatform = ref('web');
+  const saving = ref(false);
 
   function onDragStart(item, parentId = null) {
   // Explicitly assign drag type
@@ -500,44 +491,6 @@
       }
     });
     return fields;
-  }
-
-  function saveStructure()
-  {
-    const json = generateJSON();
-    const blob = new Blob([JSON.stringify(json, null, 2)], {type: "application/json"});
-
-    const filename = `${selectedType.value}_${selectedPlatform.value}.json`;
-    if (window.navigator.msSaveOrOpenBlob) {
-      window.navigator.msSaveBlob(blob, filename);
-    } 
-    else {
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = filename;
-      link.click();
-      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-    }
-  }
-
-  function loadStructure(event)
-  {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      try {
-        console.log("File contents:", e.target.result);
-        const json = JSON.parse(e.target.result);
-        console.log("Parsed JSON:", json, selectedType.value, selectedPlatform.value);
-        loadFromJson(json);
-        alert("Layout loaded successfully!");
-      } catch (err) {
-        alert("Invalid JSON file.");
-      }
-    };
-    reader.readAsText(file);
   }
 
   const selectedField = ref(null);
@@ -1120,5 +1073,42 @@
             }]
       };
     });
+  }
+
+  axios.defaults.baseURL = 'http://127.0.0.1:8000';
+
+  async function loadDropzoneStructure() {
+    const type = selectedType.value;     // e.g., 'list'
+    const platform = selectedPlatform.value;  // e.g., 'web'
+    try {
+      const res = await axios.get(`http://127.0.0.1:8000/api/layouts/${type}/${platform}`);
+      if (res.data) {
+        loadFromJson(res.data);
+      } else {
+        droppedContainers.value = [];
+      }
+    } catch (e) {
+      droppedContainers.value = [];
+      // Optional: show error to user
+    }
+  }
+
+  onMounted(loadDropzoneStructure);
+  watch([selectedType, selectedPlatform], loadDropzoneStructure);
+
+  async function saveAndDeploy() {
+    try {
+      saving.value = true;
+      const type = selectedType.value;
+      const platform = selectedPlatform.value;
+      const jsonContent = JSON.stringify(generateJSON(), null, 2);
+      await axios.put(`http://127.0.0.1:8000/api/layouts/${type}/${platform}`, { content: jsonContent });
+      alert("Layout saved and deployed!");
+      await loadDropzoneStructure();  // Reload after save
+    } catch (error) {
+      alert("Failed to save layout.");
+    } finally {
+      saving.value = false;
+    }
   }
 </script>
