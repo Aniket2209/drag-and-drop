@@ -171,7 +171,8 @@
 
 <script setup>
   import { ref, computed, onMounted } from 'vue';
-  import customFieldJSON from './assets/customFields.json'
+  import customFieldJSON from './assets/customFields.json';
+  import axios from 'axios';
 
   const items = ref([
     { id: 1, name: 'Row' , type: "row"},
@@ -628,14 +629,6 @@
       default:
         return 'text';
     }
-  }
-
-  function getAllFields(containers) {
-    return containers.flatMap(container =>
-      container.children.flatMap(row =>
-        row.fields
-      )
-    );
   }
 
   function generateListWeb(containers) {
@@ -1128,12 +1121,4 @@
       };
     });
   }
-
-function splitIntoRows(items, size) {
-  let result = [];
-  for(let i=0; i < items.length; i += size) {
-    result.push(items.slice(i, i+size));
-  }
-  return result;
-}
 </script>
