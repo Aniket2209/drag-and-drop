@@ -18,7 +18,7 @@
   <div class="flex relative gap-4">
     <div class="flex-1 p-4 border border-blue-300 rounded">
       <h2 class="font-bold mb-2">Available Fields</h2>
-      <div v-for="item in [...items, ...dynamicFields.filter(f => !f.used)]" :key = "item.id" 
+      <div v-for="(item, idx) in [...items, ...dynamicFields.filter(f => !f.used)]" :key = "idx" 
         :class="[
           'p-2 mb-2 cursor-move rounded',
           item.type === 'container' ? 'bg-green-300' :
@@ -26,7 +26,7 @@
           item.type === 'field' ? 'bg-yellow-200' :
           ''
         ]"
-        draggable = "true" @dragstart="onDragStart(item)"
+        draggable = "true" @dragstart="onDragStart(item, idx)"
         >
         {{ item.name }}
       </div>
@@ -34,13 +34,13 @@
     <div class="flex-1 p-4 border border-green-400 rounded"
     @dragover.prevent @drop="onDropRoot">
       <h2 class="font-bold mb-2">Selected Fields</h2>
-        <div v-for = "container in droppedContainers" :key = "container.dropId" class="p-2 mb-2 bg-green-300 rounded"
+        <div v-for = "(container, cIdx) in droppedContainers" :key = "cIdx" class="p-2 mb-2 bg-green-300 rounded"
         draggable = "true"
-        @dragstart = "() => onDragStart(container)"
+        @dragstart = "() => onDragStart(container, cIdx)"
         @dragover.prevent
-        @drop="event => onDropToContainerOrSwap(container.dropId, event)"
+        @drop="event => onDropToContainerOrSwap(cIdx, event)"
         >
-          <div v-if="editingContainerId === container.dropId">
+          <div v-if="editingContainerId === cIdx">
             <input
               v-model="container.name"
               @blur="editingContainerId = null"
@@ -48,21 +48,21 @@
               autofocus
             />
           </div>
-          <div v-else @dblclick="editingContainerId = container.dropId">
+          <div v-else @dblclick="editingContainerId = cIdx">
             {{ container.name }}
           </div>
-            <div v-for ="child in container.children" :key="child.dropId" class="bg-teal-200 p-2 rounded cursor-move min-h-[40px]"
+            <div v-for ="(child, rIdx) in container.children" :key="rIdx" class="bg-teal-200 p-2 rounded cursor-move min-h-[40px]"
             :draggable="dragType !== 'field'"
-            @dragstart="(e) => { e.stopPropagation(); onDragStart(child, container.dropId); }"
+            @dragstart="(e) => { e.stopPropagation(); onDragStart(child, rIdx, cIdx); }"
             @dragover.prevent
-            @drop="event => onDropToRow(child.dropId)"
+            @drop="event => onDropToRowOrSwap(cIdx, rIdx)"
             >
               {{  }}
               <div class="flex flex-wrap gap-1">
-                <div v-for = "field in child.fields" :key= "field.dropId" :style = "{ width: `calc(${100 / child.fields.length}% - 0.5rem)` }" class="p-2 rounded cursor-move"
+                <div v-for = "(field, fIdx) in child.fields" :key= "fIdx" :style = "{ width: `calc(${100 / child.fields.length}% - 0.5rem)` }" class="p-2 rounded cursor-move"
                 :class="field.type === 'empty' ? 'bg-white border border-dashed text-gray-400 italic' : 'bg-yellow-200'"
                 draggable = "true"
-                @dragstart="(e) => { e.stopPropagation(); onDragStart(field, child.dropId); }"
+                @dragstart="(e) => { e.stopPropagation(); onDragStart(field, fIdx, rIdx, cIdx); }"
                 @dragover.prevent
                 @click.prevent="onFieldClick(field)"
                 >
@@ -154,313 +154,330 @@
   </div>
   <div class="flex relative gap-4">
     <pre class="w-1/2 text-xs overflow-auto mt-4 bg-white p-2 border max-h-64">
-      {{ JSON.stringify(platformBasedJSON, null, 2) }}
+      {{ JSON.stringify(droppedContainers, null, 2) }}
     </pre>
   </div>
 </template>
 
 <script setup>
-  import { ref, computed, onMounted, watch } from 'vue';
+  import { ref, onMounted, watch } from 'vue';
   import customFieldJSON from './assets/customFields.json';
   import axios from 'axios';
 
   const items = ref([
-    { id: 1, name: 'Row' , type: "row"},
-    { id: 2, name: 'Container' , type: "container"},
-    { id: 3, name: 'Field' , type: "field"},
-    { id: 4, name: '| | Empty Slot' , type: "empty"}
+    { name: 'Row' , type: "row"},
+    { name: 'Container' , type: "container"},
+    { name: 'Field' , type: "field"},
+    { name: '| | Empty Slot' , type: "empty"}
   ]);
   const droppedContainers = ref([]);
 
-  let draggedItem = null;
+  let draggedContainerIndex = null;
+  let draggedRowIndex = null;
+  let draggedFieldIndex = null;
   let dragType = null;
-  let originalParentId = null;
-  let originalRowId = null;
+  let originalContainerIndex = null;
+  let originalRowIndex = null;
+  let draggedItem = null;
 
   const containerCount = ref(0)
   const rowCount = ref(1)
   const fieldCount = ref(1)
+  const selectedType = ref('list');
   const selectedPlatform = ref('web');
   const saving = ref(false);
 
-  function onDragStart(item, parentId = null) {
-  // Explicitly assign drag type
+  function onDragStart(item, itemIndex, parentRowIndex = null, parentContainerIndex = null) {
     dragType = item.type;
 
-    const isFreshItem = item.hasOwnProperty('id');
-    draggedItem = { ...item };
-
-    // Ensure dropId exists once — don’t overwrite
-    if (!draggedItem.dropId) {
-      draggedItem.dropId = Date.now() + Math.random();
+    // CLONE item if from panel, else use reference for layout items
+    // We decide it's from the palette if parent indexes are null
+    if (parentContainerIndex === null && parentRowIndex === null) {
+      draggedItem = { ...item }; // shallow clone is enough for palette
+      draggedItem._fresh = true;
+    } else {
+      draggedItem = item;
+      draggedItem._fresh = false;
     }
 
-    draggedItem._fresh = isFreshItem;
+    // Reset indexes
+    draggedContainerIndex = null;
+    draggedRowIndex = null;
+    draggedFieldIndex = null;
+    originalContainerIndex = null;
+    originalRowIndex = null;
 
-    // Reset both parent IDs to avoid leakage
-    originalParentId = null;
-    originalRowId = null;
-
-    // Track source origin
-    if (dragType === 'field' || dragType === 'empty') {
-      originalRowId = parentId;
-    } else if (dragType === 'row') {
-      originalParentId = parentId;
+    switch (dragType) {
+      case 'container':
+        draggedContainerIndex = itemIndex;
+        originalContainerIndex = itemIndex;
+        break;
+      case 'row':
+        draggedRowIndex = itemIndex;
+        draggedContainerIndex = parentContainerIndex;
+        originalContainerIndex = parentContainerIndex;
+        originalRowIndex = itemIndex;
+        break;
+      case 'field':
+      case 'empty':
+        draggedFieldIndex = itemIndex;
+        draggedRowIndex = parentRowIndex;
+        draggedContainerIndex = parentContainerIndex;
+        originalContainerIndex = parentContainerIndex;
+        originalRowIndex = parentRowIndex;
+        break;
+      default:
+        console.warn("Unknown drag type:", dragType);
+        break;
     }
-
-    console.log("Drag Start:", draggedItem, "Type:", dragType);
+    console.log(`Drag Start - Type: ${dragType}, ContainerIdx: ${draggedContainerIndex}, RowIdx: ${draggedRowIndex}, FieldIdx: ${draggedFieldIndex}`);
   }
 
   function onDropRoot() {
-    if(dragType === 'container' && draggedItem && draggedItem._fresh && !droppedContainers.value.some(c => c.dropId === draggedItem.dropId)) {
-      containerCount.value++;
-      draggedItem.name = `Container${containerCount.value}`;
-      draggedItem.children = [];
-      droppedContainers.value.push(draggedItem);
+    // Only allow dropping new containers (created from available items panel)
+    if (dragType === 'container' && draggedItem) {
+      // Check if this is a fresh item (not yet added)
+      if (draggedItem._fresh) {
+        // Add new container with unique name and empty children array
+        containerCount.value++;
+        const newContainer = {
+          name: `Container${containerCount.value}`,
+          type: 'container',
+          children: []
+        };
+        droppedContainers.value.push(newContainer);
+      } else {
+        console.warn("Ignored container drop in blank space because it's not a new item");
+      }
     }
-    else {
-      console.warn("Ignored container drop in blank space not fresh");
-    }
+    
+    // Clear drag state
     draggedItem = null;
     dragType = null;
-    originalParentId = null;
-    originalRowId= null;
+    // Clear stored source indexes instead of IDs
+    draggedContainerIndex = null;
+    draggedRowIndex = null;
+    draggedFieldIndex = null;
+    originalContainerIndex = null;
+    originalRowIndex = null;
   }
 
-  function onDropToContainerOrSwap(containerId, event)
-  {
+  function onDropToContainerOrSwap(targetContainerIdx) {
     if (!draggedItem || !dragType || !draggedItem.type) return;
 
     if (dragType === 'row' && draggedItem.type === 'row') {
-      onDropToContainer(containerId);
-    } 
-    else if (dragType === 'container' && draggedItem.type === 'container') {
-      onDropToSwapContainer(containerId);
-    } 
-    else {
-      console.warn(`Dropped ${dragType} with mismatched type:`, draggedItem);
+      // Move or add the dragged row into the target container
+      onDropToContainer(targetContainerIdx);
+    } else if (dragType === 'container' && draggedItem.type === 'container') {
+      // Swap two containers based on their index
+      onDropToSwapContainer(targetContainerIdx);
+    } else {
+      console.warn(`Dropped ${dragType} with mismatched type`);
     }
-    event.preventDefault();
   }
 
+  function onDropToRowOrSwap(targetContainerIdx, targetRowIdx) {
+    if (!draggedItem || !dragType || !draggedItem.type) return;
 
-  function onDropToContainer(containerId) {
-    const targetContainer = droppedContainers.value.find(c => c.dropId === containerId);
-    if (!targetContainer || dragType !== "row") return;
+    if (dragType === 'field' && draggedItem.type === 'field') {
+      onDropToRow(targetContainerIdx, targetRowIdx);
+    }
+    else if (dragType === 'row' && draggedItem.type === 'row') {
+      onDropToSwapRow(targetContainerIdx, targetRowIdx);
+    }
+    else {
+      console.warn(`Dropped ${dragType} with mismatched type`);
+    }
+  }
 
-    const isFresh = draggedItem?.type === 'row' && draggedItem?.id !== undefined;
+  function onDropToContainer(targetContainerIndex) {
+    if (!draggedItem || dragType !== 'row') return;
 
-    if (isFresh) {
-      // Fresh row — assign identity
-      draggedItem = {
+    const targetContainer = droppedContainers.value[targetContainerIndex];
+    if (!targetContainer) return;
+
+    if (draggedItem._fresh) {
+      const newRow = {
         name: `Row${rowCount.value}`,
-        dropId: Date.now() + Math.random(),
         type: 'row',
         fields: []
       };
       rowCount.value++;
-      // Feel free to add naming logic back if needed
-    } else if (originalParentId !== null) {
-      const originalContainer = droppedContainers.value.find(c => c.dropId === originalParentId);
-      if (originalContainer) {
-        originalContainer.children = originalContainer.children.filter(
-          row => row.dropId !== draggedItem.dropId
-        );
+      targetContainer.children.push(newRow);
+    } 
+    else {
+      if (
+        typeof originalContainerIndex === 'number' &&
+        typeof originalRowIndex === 'number' &&
+        originalContainerIndex >= 0 &&
+        originalRowIndex >= 0
+      ) {
+        const originalContainer = droppedContainers.value[originalContainerIndex];
+        if (!originalContainer) return;
+
+        const [movedRow] = originalContainer.children.splice(originalRowIndex, 1);
+        targetContainer.children.push(movedRow);
       }
     }
 
-    targetContainer.children.push(draggedItem);
-
-    // Cleanup
     draggedItem = null;
     dragType = null;
-    originalParentId = null;
-    originalRowId = null;
-  }
-
-  function onDropToSwapContainer(targetContainerId)
-  {
-    if (dragType !== 'container' || !draggedItem?.dropId) return;
-
-    const draggedIndex = droppedContainers.value.findIndex(c => c.dropId === draggedItem.dropId);
-    const targetIndex = droppedContainers.value.findIndex(c => c.dropId === targetContainerId);
-
-    if (draggedIndex === -1 || targetIndex === -1 || draggedIndex === targetIndex) return;
-
-    // Swap containers
-    const temp = droppedContainers.value[draggedIndex];
-    droppedContainers.value[draggedIndex] = droppedContainers.value[targetIndex];
-    droppedContainers.value[targetIndex] = temp;
-
-    // Cleanup
     draggedItem = null;
     dragType = null;
-    originalParentId = null;
-    originalRowId = null;
+    originalContainerIndex = null;
+    originalRowIndex = null;
   }
 
-  function onDropToRow(targetRowId) {
+  function onDropToSwapContainer(targetContainerIndex) {
+    if (dragType !== 'container') return;
+
+    // draggedContainerIndex is set during drag start
+    if (draggedContainerIndex === null) return;
+    if (targetContainerIndex === null) return;
+    if (draggedContainerIndex === targetContainerIndex) return;
+
+    const arr = droppedContainers.value;
+
+    // Swap containers at draggedContainerIndex and targetContainerIndex
+    const temp = arr[draggedContainerIndex];
+    arr[draggedContainerIndex] = arr[targetContainerIndex];
+    arr[targetContainerIndex] = temp;
+
+    // Cleanup drag state
+    draggedContainerIndex = null;
+    draggedRowIndex = null;
+    draggedFieldIndex = null;
+    dragType = null;
+    originalContainerIndex = null;
+    originalRowIndex = null;
+    draggedItem = null;
+  }
+
+  function onDropToRow(targetContainerIndex, targetRowIndex) {
     if (dragType !== 'field' && dragType !== 'empty') return;
 
-    const targetContainer = droppedContainers.value.find(container =>
-      container.children.some(row => row.dropId === targetRowId)
-    );
-
+    const targetContainer = droppedContainers.value[targetContainerIndex];
     if (!targetContainer) return;
 
-    const targetRow = targetContainer.children.find(row => row.dropId === targetRowId);
-    if (!targetRow.fields) targetRow.fields = [];
+    const targetRow = targetContainer.children[targetRowIndex];
+    if (!targetRow) return;
 
-    if(draggedItem.dropId && originalRowId !== null) {
-      const originalContainer = droppedContainers.value.find(container =>
-        container.children.some(row => row.dropId === originalRowId)
-      );
-      if (originalContainer) {
-        const originalRow = originalContainer.children.find(row => row.dropId === originalRowId);
-        if (originalRow) {
-          originalRow.fields = originalRow.fields.filter(field => field.dropId !== draggedItem.dropId);
-        }
-      }
-      targetRow.fields.push(draggedItem)
+    if (!Array.isArray(targetRow.fields)) targetRow.fields = [];
+
+    if (draggedItem && draggedItem._fresh) {
+      // Dragging new dynamic field
+      const newField = {
+        ...draggedItem,
+        type: draggedItem.type || 'field',
+        used: true,
+      };
+      targetRow.fields.push(newField);
+
+      // Mark dynamic field as used
+      const matchingDynamic = dynamicFields.value.find(f => f.name === draggedItem.name);
+      if (matchingDynamic) matchingDynamic.used = true;
     }
+    else if (
+      typeof originalContainerIndex === 'number' &&
+      typeof originalRowIndex === 'number' &&
+      typeof draggedFieldIndex === 'number'
+    ) {
+      // Moving existing field to new row
+      const originalContainer = droppedContainers.value[originalContainerIndex];
+      if (!originalContainer) return;
+
+      const originalRow = originalContainer.children[originalRowIndex];
+      if (!originalRow) return;
+
+      // Remove field from original row
+      const [movedField] = originalRow.fields.splice(draggedFieldIndex, 1);
+
+      // Add it to target row
+      targetRow.fields.push(movedField);
+    } 
     else {
-      if (draggedItem.dropId && originalRowId !== null) {
-        // Move existing field from one row to another
-        const originalContainer = droppedContainers.value.find(container =>
-          container.children.some(row => row.dropId === originalRowId)
-        );
-        if (originalContainer) {
-          const originalRow = originalContainer.children.find(row => row.dropId === originalRowId);
-          if (originalRow) {
-            originalRow.fields = originalRow.fields.filter(field => field.dropId !== draggedItem.dropId);
-          }
-        }
-        targetRow.fields.push(draggedItem);
-      }
-      else if (draggedItem?.id) {
-        // Dragging from dynamic fields (preserve field)
-        const newField = {
-          ...draggedItem,
-          dropId: Date.now() + Math.random(),  // Give it a unique ID
-          used: true
-        };
-        targetRow.fields.push(newField);
-
-        const matchingDynamic = dynamicFields.value.find(f => f.id === draggedItem.id);
-        if (matchingDynamic) matchingDynamic.used = true;
-      } 
-      else {
-        // Regular default fields
-        const newField = {
-          name: dragType === 'empty' ? "| |" : `Field${fieldCount.value}`,
-          dropId: Date.now() + Math.random(),
-          type: dragType
-        };
-        fieldCount.value++;
-        
-        targetRow.fields.push(newField);
-      }
+      // Add new default field or empty slot
+      const newField = {
+        name: dragType === 'empty' ? "| |" : `Field${fieldCount.value}`,
+        type: dragType,
+      };
+      fieldCount.value++;
+      targetRow.fields.push(newField);
     }
-
-    const matchingDynamic = dynamicFields.value.find(f => f.id === draggedItem.id);
-    if (matchingDynamic) matchingDynamic.used = true;
-    
-    console.log(draggedItem);
-    console.log(originalRowId);
-    console.log(targetRow.fields);
 
     draggedItem = null;
     dragType = null;
-    originalRowId = null;
-    originalParentId = null;
+    draggedFieldIndex = null;
+    draggedRowIndex = null;
+    draggedContainerIndex = null;
+    originalContainerIndex = null;
+    originalRowIndex = null;
   }
 
-  function onDropToDelete()
-  {
+  function onDropToSwapRow(targetContainerIdx, targetRowIdx) {
+    if (dragType !== 'row') return;
+    if (draggedContainerIndex === null || draggedRowIndex === null) return;
+    if (targetContainerIdx === null || targetRowIdx === null) return;
+
+    // Cannot drop a row "on itself" in same position.
+    if (draggedContainerIndex === targetContainerIdx && draggedRowIndex === targetRowIdx) return;
+
+    const sourceRows = droppedContainers.value[draggedContainerIndex].children;
+    const [movingRow] = sourceRows.splice(draggedRowIndex, 1);
+
+    // Insert at the position of the dropped row in the target container
+    const targetRows = droppedContainers.value[targetContainerIdx].children;
+    targetRows.splice(targetRowIdx, 0, movingRow);
+
+    // Clear state (important!)
+    draggedRowIndex = null;
+    draggedContainerIndex = null;
+    draggedItem = null;
+    dragType = null;
+    originalContainerIndex = null;
+    originalRowIndex = null;
+  }
+
+  function onDropToDelete() {
     if (!draggedItem || !dragType) return;
 
-    if (dragType === 'row' && originalParentId !== null) {
-      const container = droppedContainers.value.find(c => c.dropId === originalParentId);
-      if (container) {
-        container.children = container.children.filter(row => row.dropId !== draggedItem.dropId);
-      }
-    }
-
-    if ((dragType === 'field' || dragType === 'empty') && originalRowId !== null) {
-      const container = droppedContainers.value.find(c =>
-        c.children.some(row => row.dropId === originalRowId)
-      );
-      if (container) {
-        const row = container.children.find(r => r.dropId === originalRowId);
-        if (row) {
-          row.fields = row.fields.filter(field => field.dropId !== draggedItem.dropId);
+    if (dragType === 'row') {
+      if (typeof originalContainerIndex === 'number' && typeof originalRowIndex === 'number') {
+        const container = droppedContainers.value[originalContainerIndex];
+        if (container) {
+          container.children.splice(originalRowIndex, 1);
         }
       }
+    } 
+    else if (dragType === 'field' || dragType === 'empty') {
+      if (
+        typeof originalContainerIndex === 'number' &&
+        typeof originalRowIndex === 'number' &&
+        typeof draggedFieldIndex === 'number'
+      ) {
+        const container = droppedContainers.value[originalContainerIndex];
+        if (container) {
+          const row = container.children[originalRowIndex];
+          if (row && Array.isArray(row.fields)) {
+            row.fields.splice(draggedFieldIndex, 1);
+          }
+        }
+      }
+    } 
+    else if (dragType === 'container') {
+      if (typeof draggedContainerIndex === 'number') {
+        droppedContainers.value.splice(draggedContainerIndex, 1);
+      }
     }
 
-    if (dragType === 'container' && draggedItem?.type === 'container') {
-      droppedContainers.value = droppedContainers.value.filter(
-        c => c.dropId !== draggedItem.dropId
-      );
-    }
-
-    // Cleanup
+    // Clear drag state
     draggedItem = null;
     dragType = null;
-    originalParentId = null;
-    originalRowId = null;
-  }
-
-  const formattedJSON = computed(() =>
-    droppedContainers.value.map(container => ({
-    name: container.name || "Untitled Group",
-    itemType: "group",
-    colCount: container.children.length || 1,
-    items: container.children.map(row => ({
-      itemType: "group",
-      colCount: row.fields.length || 1,
-      items: row.fields.map(field => {
-        if (field.type === "empty") {
-          return {
-            itemType: "empty",
-            label: {
-              text: "| |"
-            }
-          };
-        }
-        return {
-          dataField: field.name || "unknown_field",
-          editorType: field.editorType || inferEditorType(field.name),
-          label: {
-            text: formatLabel(field.name)
-          },
-          width: field.width || null,
-          required: field.required || false,
-          readonly: field.readonly || false,
-        };
-      })
-    }))
-  }))
-  );
-
-  function formatLabel(name) {
-    // Convert camelCase or snake_case to Title Case
-    return name
-      .replace(/[_\-]/g, ' ')
-      .replace(/([a-z])([A-Z])/g, '$1 $2')
-      .replace(/\b\w/g, l => l.toUpperCase());
-  }
-
-  function inferEditorType(fieldName) {
-    if (!fieldName) return "dxTextBox";
-
-    const lower = fieldName.toLowerCase();
-    if (lower.includes("date")) return "dxDateBox";
-    if (lower.includes("time")) return "Datetime";
-    if (lower.includes("status") || lower.includes("type")) return "dxSelectBox";
-    if (lower.startsWith("rlt_") || lower.includes("employee")) return "Relate";
-
-    return "dxTextBox";
+    draggedContainerIndex = null;
+    draggedRowIndex = null;
+    draggedFieldIndex = null;
+    originalContainerIndex = null;
+    originalRowIndex = null;
   }
 
   const editingContainerId = ref(null);
@@ -480,7 +497,6 @@
           if (item.itemType === 'empty') return;
 
           fields.push({
-            id: Date.now() + Math.random(),
             name: item.label?.text || item.dataField || "Unnamed Field",
             type: 'field',
             dataField: item.dataField,
@@ -518,9 +534,10 @@
   function applyFieldProperties()
   {
     if (!selectedField.value) return;
-    for (const container of droppedContainers.value) {
+    let found = false;
+    outer: for (const container of droppedContainers.value) {
       for (const row of container.children) {
-        const fieldIndex = row.fields.findIndex(f => f.dropId === selectedField.value.dropId);
+        const fieldIndex = row.fields.findIndex(f => f === selectedField.value);
         if (fieldIndex !== -1) {
           const field = row.fields[fieldIndex];
 
@@ -542,539 +559,6 @@
     alert("Failed to update the selected field. It was not found.");
   }
 
-  const platformBasedJSON = computed(() => {
-    if (selectedPlatform.value === 'web') {
-      // Your current web JSON logic, as in formattedJSON
-      return formattedJSON.value;
-    } 
-    else if (selectedPlatform.value === 'android')
-    {
-      return droppedContainers.value.map(container => ({
-        groupLabel: container.name || "Group",
-        rows: (container.children || []).map(row => ({
-          fields: (row.fields || []).map(field => ({
-            name: field.name,
-            type: mapEditorTypeToAndroid(field.editorType || inferEditorType(field.name)),
-            label: formatLabel(field.name),
-            required: !!field.required,
-            readonly: !!field.readonly,
-            width: field.width || null
-          }))
-        }))
-      }));
-    }
-    return [];
-  });
-
-  const selectedType = ref('list');
-
-  function mapEditorTypeToAndroid(editorType) {
-    switch (editorType) {
-      case 'dxTextBox':
-        return 'text';
-      case 'dxDateBox':
-        return 'date';
-      case 'dxSelectBox':
-        return 'select';
-      case 'dxCheckBox':
-        return 'checkbox';
-      // Add more as needed for your mobile UI
-      default:
-        return 'text';
-    }
-  }
-
-  function generateListWeb(containers) {
-    // Each container becomes a 'group' with nested rows mapped as separate sub-groups
-    return containers.map((container, ci) => ({
-      name: container.name || `Container${ci + 1}`,  // preserve container name
-      itemType: "group",
-      colCount: container.children.length,
-      items: container.children.map((row, ri) => ({
-        itemType: "group",
-        colCount: row.fields.length,
-        items: row.fields.map(field => {
-          if (field.type === "empty") {
-            return {
-              itemType: "empty",
-              label: { text: "| |" }
-            };
-          }
-          return {
-            dataField: field.dataField || field.name,
-            editorType: field.editorType || "dxTextBox",
-            label: { text: field.name },
-            visible: true,
-            required: field.required || false,
-            readonly: field.readonly || false,
-            width: field.width || null,
-          };
-        })
-      }))
-    }));
-  }
-  function generateListMobile(containers) {
-    return {
-      version: "1.0.0",
-      Screen: {
-        ScreenId: "02_listView",
-        ScreenName: "List View",
-        layout: {
-          type: "ItemLayout",
-          dataKey: "userData",
-          children: containers.map(container => ({
-            type: "verticalContainer",
-            name: container.name || "Unnamed Container",
-            corner_radius: 15,
-            bgColor: "#FFEFEFEF",
-            padding: { left: 10, right: 10, top: 5, bottom: 5 },
-            children: container.children.map(row => ({
-              type: "singleRowLayout",
-              name: row.name || "Unnamed Row",
-              children: row.fields.map(field => ({
-                type:
-                  field.editorType === "dxSelectBox"
-                    ? "dropdown"
-                    : field.editorType === "dxTextBox"
-                    ? "inputText"
-                    : field.editorType === "dxTextArea"
-                    ? "inputText"
-                    : "inputText",
-                id: field.dataField || field.name,
-                keyboardType: field.editorType === "Phone" ? "number" : "text",
-                font_size: 15,
-                font_weight: "normal",
-                padding: { left: 10, right: 10 },
-                text: field.name
-              }))
-            }))
-          }))
-        }
-      }
-    };
-  }
-  function generateEditWeb(containers) {
-    return containers.map((container, ci) => ({
-      name: container.name || `Container${ci + 1}`,  // Preserve container name
-      itemType: "group",
-      colCount: container.children.length,
-      items: container.children.map((row, ri) => ({
-        itemType: "group",
-        colCount: row.fields.length,
-        items: row.fields.map(field => {
-          if (field.type === "empty") {
-            return {
-              itemType: "empty",
-              label: { text: "| |" }
-            };
-          }
-          return {
-            dataField: field.dataField || field.name,
-            editorType: field.editorType || "dxTextBox",
-            label: { text: field.name },
-            required: field.required || false,
-            readonly: field.readonly || false,
-            width: field.width || null,
-          };
-        })
-      }))
-    }));
-  }
-  function generateEditMobile(containers) {
-    return {
-      version: "1.0.0",
-      Screen: {
-        ScreenId: "03_createView",
-        ScreenName: "Create View",
-        layout: {
-          type: "singleColumnLayout",
-          padding: { top: 10 },
-          children: containers.map(container => ({
-            name: container.name || "Unnamed Container",
-            type: "verticalContainer",
-            corner_radius: 15,
-            bgColor: "#FFC5DCFF",
-            padding: { left: 10, right: 10, top: 5, bottom: 5 },
-            children: container.children.map(row => ({
-              type: "singleRowLayout",
-              children: row.fields.map(field => ({
-                type: field.editorType === 'dxSelectBox' ? "dropdown" :
-                      field.editorType === 'dxTextBox' ? "inputText" :
-                      field.editorType === 'dxTextArea' ? "inputText" : "inputText",
-                id: field.dataField || field.name,
-                keyboardType: (field.editorType === "Phone" ? "number" : "text"),
-                font_size: 15,
-                font_weight: "normal",
-                padding: { left: 10, right: 10 },
-                text: field.name
-              }))
-            }))
-          }))
-        }
-      }
-    };
-  }
-  function generateDetailWeb(containers) {
-    return containers.map((container, ci) => ({
-      name: container.name || `Container${ci + 1}`,
-      itemType: "group",
-      children: container.children.map(row => ({
-        name: row.name || "Row",
-        itemType: "group",
-        items: row.fields.map(field => {
-          if (field.type === "empty") {
-            return {
-              itemType: "empty",
-              label: { text: "| |" }
-            };
-          }
-          return {
-            dataField: field.dataField || field.name,
-            editorType: field.editorType || "dxTextBox",
-            label: { text: field.name },
-            required: field.required || false,
-            readonly: field.readonly || false,
-            width: field.width || null
-          };
-        })
-      }))
-    }));
-  }
-
-  function generateJSON()
-  {
-    if(selectedType.value==='list' && selectedPlatform.value==='web') {
-      return generateListWeb(droppedContainers.value);
-    }
-    if(selectedType.value==='list' && selectedPlatform.value==='android') {
-      return generateListMobile(droppedContainers.value);
-    }
-    if(selectedType.value==='edit' && selectedPlatform.value==='web') {
-      return generateEditWeb(droppedContainers.value);
-    }
-    if(selectedType.value==='edit' && selectedPlatform.value==='android') {
-      return generateEditMobile(droppedContainers.value);
-    }
-    if(selectedType.value==='detail' && selectedPlatform.value==='web') {
-      return generateDetailWeb(droppedContainers.value);
-    }
-    if(selectedType.value==='detail' && selectedPlatform.value==='android') {
-      return {};
-    }
-  }
-
-  function loadFromJson(json) {
-    const key = `${selectedType.value}_${selectedPlatform.value}`;
-    let parsed;
-    switch (key) {
-      case "list_web":
-        parsed = parseListWeb(json);
-        break;
-      case "list_android":
-        parsed = parseListMobile(json);
-        break;
-      case "edit_web":
-        parsed = parseEditWeb(json);
-        break;
-      case "edit_android":
-        parsed = parseEditMobile(json);
-        break;
-      case "detail_web":
-        parsed = parseDetailWeb(json);
-        break;
-      case "detail_android":
-        // Implement when ready, or clear:
-        parsed = [];
-        break;
-      default:
-        alert("Unsupported layout or file format.");
-        parsed = [];
-    }
-    droppedContainers.value = parsed;
-  }
-
-  function generateId() {
-    return Date.now() + Math.random();
-  }
-
-  function parseListWeb(json) {
-    if (!Array.isArray(json)) {
-      alert("File format error: Expected array for List Web layout.");
-      return [];
-    }
-
-    return json.map((group, gi) => ({
-      id: generateId(),
-      dropId: generateId(),
-      name: group.name || `Container${gi + 1}`,
-      type: "container",
-      children: Array.isArray(group.items) && group.items.length > 0
-        ? group.items.map((row, ri) => ({
-            id: generateId(),
-            dropId: generateId(),
-            name: `Row${ri + 1}`,
-            type: "row",
-            fields: Array.isArray(row.items)
-              ? row.items.map(field => {
-                  if (field.itemType === "empty") {
-                    return {
-                      id: generateId(),
-                      dropId: generateId(),
-                      name: "| |",
-                      type: "empty",
-                      used: true,
-                    };
-                  }
-                  return {
-                    id: generateId(),
-                    dropId: generateId(),
-                    name: field.dataField || "unknown_field",
-                    type: "field",
-                    dataField: field.dataField,
-                    editorType: field.editorType,
-                    used: true,
-                    required: field.required || false,
-                    readonly: field.readonly || false,
-                    width: field.width || null,
-                  };
-                })
-              : []
-          }))
-        : [{
-            id: generateId(),
-            dropId: generateId(),
-            name: "Row1",
-            type: "row",
-            fields: []
-          }]
-    }));
-  }
-
-  function parseListMobile(json) {
-    try {
-      const layoutChildren = json?.Screen?.layout?.children;
-      if (!Array.isArray(layoutChildren)) {
-        alert("File format error: Expected array of containers in mobile list layout.");
-        return [];
-      }
-
-      return layoutChildren.map(container => {
-        const rows = Array.isArray(container.children) ? container.children : [];
-
-        return {
-          id: generateId(),
-          dropId: generateId(),
-          name: container.name || "Unnamed Container",
-          type: "container",
-          children: rows.map((row, idx) => {
-            if (row.type !== "singleRowLayout" || !Array.isArray(row.children)) {
-              return null;
-            }
-            return {
-              id: generateId(),
-              dropId: generateId(),
-              name: row.name || `Row${idx + 1}`,
-              type: "row",
-              fields: row.children.map(field => ({
-                id: generateId(),
-                dropId: generateId(),
-                name: field.id || field.text || "unknown_field",
-                type: "field",
-                dataField: field.id || field.text || "unknown_field",
-                editorType: mapMobileTypeToEditorType(field.type),
-                used: true,
-                required: false,
-                readonly: false,
-                width: null
-              }))
-            };
-          }).filter(r => r !== null)
-        };
-      });
-    } catch (err) {
-      console.error("Error parsing list mobile layout:", err);
-      alert("Invalid JSON structure for Mobile List layout.");
-      return [];
-    }
-  }
-
-  function parseEditWeb(json) {
-    if (!Array.isArray(json)) {
-      alert("File format error: Expected array for Edit Web layout.");
-      return [];
-    }
-
-    return json.map((group, gi) => ({
-      id: generateId(),
-      dropId: generateId(),
-      name: group.name || `Container${gi + 1}`,
-      type: "container",
-      children: Array.isArray(group.items) && group.items.length > 0
-        ? group.items.map((row, ri) => ({
-            id: generateId(),
-            dropId: generateId(),
-            name: `Row${ri + 1}`,
-            type: "row",
-            fields: Array.isArray(row.items)
-              ? row.items.map(field => {
-                  if (field.itemType === "empty") {
-                    return {
-                      id: generateId(),
-                      dropId: generateId(),
-                      name: "| |",
-                      type: "empty",
-                      used: true
-                    };
-                  }
-                  return {
-                    id: generateId(),
-                    dropId: generateId(),
-                    name: field.dataField || "unknown_field",
-                    type: "field",
-                    dataField: field.dataField,
-                    editorType: field.editorType,
-                    used: true,
-                    required: field.required || false,
-                    readonly: field.readonly || false,
-                    width: field.width || null
-                  };
-                })
-              : []
-          }))
-        : [{
-            id: generateId(),
-            dropId: generateId(),
-            name: "Row1",
-            type: "row",
-            fields: []
-          }]
-    }));
-  }
-
-  function parseEditMobile(json) {
-    try {
-      // Defensive: Check structure exists
-      if (!json || !json.Screen || !json.Screen.layout || !Array.isArray(json.Screen.layout.children)) {
-        alert("Invalid mobile edit structure.");
-        return [];
-      }
-
-      // Each 'verticalContainer' in children array is mapped to a container
-      const containers = json.Screen.layout.children.map(vc => {
-        // Defensive: children could be undefined
-        const childrenArr = Array.isArray(vc.children) ? vc.children : [];
-
-        return {
-          id: generateId(),
-          dropId: generateId(),
-          name: (typeof vc.name === "string") ? vc.name : "",
-          type: "container",
-          children: childrenArr.map((row, idx) => {
-            // Each singleRowLayout in verticalContainer.children is a row
-            if (row.type !== "singleRowLayout" || !Array.isArray(row.children)) {
-              return null; // skip unexpected node
-            }
-            return {
-              id: generateId(),
-              dropId: generateId(),
-              name: "Row" + (idx + 1),
-              type: "row",
-              fields: row.children
-                .filter(field => field && (field.type === "inputText" || field.type === "dropdown"))
-                .map(field => ({
-                  id: generateId(),
-                  dropId: generateId(),
-                  name: field.id || field.text || "unknown_field",
-                  type: "field",
-                  dataField: field.id || field.text,
-                  editorType: mapMobileTypeToEditorType(field.type),
-                  used: true,
-                  required: field.isRequired || false,
-                  readonly: false,
-                  width: null,
-                })),
-            };
-          }).filter(r => !!r) // Remove nulls
-        };
-      });
-
-      return containers;
-    } catch (err) {
-      console.error("Error in parseEditMobile:", err);
-      alert("Invalid JSON structure for Android Edit layout.");
-      return [];
-    }
-  }
-
-  // Helper to map mobile field types to your editorType strings
-  function mapMobileTypeToEditorType(type) {
-    switch (type) {
-      case "inputText":
-        return "dxTextBox";
-      case "dropdown":
-        return "dxSelectBox";
-      case "inputTextArea":
-        return "dxTextArea";
-      default:
-        return "dxTextBox";
-    }
-  }
-
-  function parseDetailWeb(json) {
-    if (!Array.isArray(json)) {
-      alert("File format error: Expected array for Detail Web layout.");
-      return [];
-    }
-
-    return json.map((container, ci) => {
-      const rows = Array.isArray(container.children) ? container.children : [];
-
-      return {
-        name: container.name || `Container${ci + 1}`,
-        type: "container",
-        children: rows.length > 0
-          ? rows.map((row, ri) => ({
-              id: generateId(),
-              dropId: generateId(),
-              name: row.name || `Row${ri + 1}`,
-              type: "row",
-              fields: Array.isArray(row.items)
-                ? row.items.map(field => {
-                    if (field.itemType === "empty") {
-                      return {
-                        id: generateId(),
-                        dropId: generateId(),
-                        name: "| |",
-                        type: "empty",
-                        used: true
-                      };
-                    }
-                    return {
-                      id: generateId(),
-                      dropId: generateId(),
-                      name: (field.label && field.label.text) || field.dataField || "unknown_field",
-                      type: "field",
-                      dataField: field.dataField,
-                      editorType: field.editorType || "dxTextBox",
-                      used: true,
-                      required: !!field.required,
-                      readonly: !!field.readonly,
-                      width: field.width || null
-                    };
-                  })
-                : []
-            }))
-          : [{
-              id: generateId(),
-              dropId: generateId(),
-              name: "Row1",
-              type: "row",
-              fields: []
-            }]
-      };
-    });
-  }
-
   axios.defaults.baseURL = 'http://127.0.0.1:8000';
 
   async function loadDropzoneStructure() {
@@ -1082,14 +566,10 @@
     const platform = selectedPlatform.value;  // e.g., 'web'
     try {
       const res = await axios.get(`http://127.0.0.1:8000/api/layouts/${type}/${platform}`);
-      if (res.data) {
-        loadFromJson(res.data);
-      } else {
-        droppedContainers.value = [];
-      }
-    } catch (e) {
+      droppedContainers.value = res.data ? res.data : [];
+    }
+    catch (e) {
       droppedContainers.value = [];
-      // Optional: show error to user
     }
   }
 
@@ -1101,7 +581,7 @@
       saving.value = true;
       const type = selectedType.value;
       const platform = selectedPlatform.value;
-      const jsonContent = JSON.stringify(generateJSON(), null, 2);
+      const jsonContent = JSON.stringify(droppedContainers.value, null, 2);
       await axios.put(`http://127.0.0.1:8000/api/layouts/${type}/${platform}`, { content: jsonContent });
       alert("Layout saved and deployed!");
       await loadDropzoneStructure();  // Reload after save
