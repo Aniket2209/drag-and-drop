@@ -37,8 +37,8 @@
         <div v-for = "(container, cIdx) in droppedContainers" :key = "cIdx" class="p-2 mb-2 bg-green-300 rounded"
         draggable = "true"
         @dragstart = "() => onDragStart(container, cIdx)"
-        @dragover.prevent
-        @drop="event => onDropToContainerOrSwap(cIdx, event)"
+        @dragover.stop.prevent
+        @drop.stop="onDropToContainerOrSwap(cIdx)"
         >
           <div v-if="editingContainerId === cIdx">
             <input
@@ -53,9 +53,9 @@
           </div>
             <div v-for ="(child, rIdx) in container.children" :key="rIdx" class="bg-teal-200 p-2 rounded cursor-move min-h-[40px]"
             :draggable="dragType !== 'field'"
-            @dragstart="(e) => { e.stopPropagation(); onDragStart(child, rIdx, cIdx); }"
-            @dragover.prevent
-            @drop="event => onDropToRowOrSwap(cIdx, rIdx)"
+            @dragstart="(e) => { e.stopPropagation(); onDragStart(child, rIdx, null, cIdx); }"
+            @dragover.stop.prevent
+            @drop.stop="onDropToRowOrSwap(cIdx, rIdx)"
             >
               {{  }}
               <div class="flex flex-wrap gap-1">
@@ -322,8 +322,6 @@
 
     draggedItem = null;
     dragType = null;
-    draggedItem = null;
-    dragType = null;
     originalContainerIndex = null;
     originalRowIndex = null;
   }
@@ -419,17 +417,29 @@
     if (draggedContainerIndex === null || draggedRowIndex === null) return;
     if (targetContainerIdx === null || targetRowIdx === null) return;
 
-    // Cannot drop a row "on itself" in same position.
-    if (draggedContainerIndex === targetContainerIdx && draggedRowIndex === targetRowIdx) return;
+    const sourceContainer = droppedContainers.value[draggedContainerIndex];
+    if (!sourceContainer) return;
 
-    const sourceRows = droppedContainers.value[draggedContainerIndex].children;
-    const [movingRow] = sourceRows.splice(draggedRowIndex, 1);
+    // Take row from source
+    const [movingRow] = sourceContainer.children.splice(draggedRowIndex, 1);
 
-    // Insert at the position of the dropped row in the target container
-    const targetRows = droppedContainers.value[targetContainerIdx].children;
-    targetRows.splice(targetRowIdx, 0, movingRow);
+    if (draggedContainerIndex === targetContainerIdx) {
+      // 🔹 Case 1: Same container → reorder by inserting at new index
+      const targetRows = droppedContainers.value[targetContainerIdx].children;
 
-    // Clear state (important!)
+      // Adjust index if dragging forward (because splice removed earlier element)
+      const adjustedIndex = draggedRowIndex < targetRowIdx ? targetRowIdx - 1 : targetRowIdx;
+
+      targetRows.splice(adjustedIndex, 0, movingRow);
+    } else {
+      // 🔹 Case 2: Different container → insert into target
+      const targetContainer = droppedContainers.value[targetContainerIdx];
+      if (!targetContainer) return;
+
+      targetContainer.children.splice(targetRowIdx, 0, movingRow);
+    }
+
+    // ✅ Cleanup
     draggedRowIndex = null;
     draggedContainerIndex = null;
     draggedItem = null;
@@ -518,11 +528,7 @@
 
   function onFieldClick(field)
   {
-    selectedField.value = {
-      ...field,
-      label: formatLabel(field.name),
-      editorType: inferEditorType(field.name)
-    };
+    selectedField.value = field;
 
     fieldProperties.value = {
       width: field.width || '',
@@ -534,29 +540,12 @@
   function applyFieldProperties()
   {
     if (!selectedField.value) return;
-    let found = false;
-    outer: for (const container of droppedContainers.value) {
-      for (const row of container.children) {
-        const fieldIndex = row.fields.findIndex(f => f === selectedField.value);
-        if (fieldIndex !== -1) {
-          const field = row.fields[fieldIndex];
 
-          field.width = fieldProperties.value.width;
-          field.required = fieldProperties.value.required;
-          field.readonly = fieldProperties.value.readonly;
+    selectedField.value.width = fieldProperties.value.width;
+    selectedField.value.required = fieldProperties.value.required;
+    selectedField.value.readonly = fieldProperties.value.readonly;
 
-          selectedField.value.width = fieldProperties.value.width;
-          selectedField.value.required = fieldProperties.value.required;
-          selectedField.value.readonly = fieldProperties.value.readonly;
-
-          alert(`Field "${field.name}" updated successfully.`);
-
-          return;
-        }
-      }
-    }
-
-    alert("Failed to update the selected field. It was not found.");
+    alert(`Field "${selectedField.value.name}" updated successfully.`);
   }
 
   axios.defaults.baseURL = 'http://127.0.0.1:8000';
