@@ -68,9 +68,9 @@
                 >
                 <span
                   class="block truncate"
-                  :title="field.name"
+                  :title="field.label?.text"
                   >
-                  {{ field.groupType === 'empty' ? '| |' : field.name }}
+                  {{ field.groupType === 'empty' ? '| |' : field.label?.text }}
                 </span>
                 </div>
               </div>
@@ -95,7 +95,7 @@
           <input
             type="text"
             class="mt-1 block w-full border border-gray-300 rounded px-2 py-1"
-            v-model="selectedField.label"
+            v-model="selectedField.label.text"
             disabled
           />
         </div>
@@ -378,8 +378,11 @@
     if (draggedItem && draggedItem._fresh) {
       // Dragging new dynamic field
       const newField = {
-        ...draggedItem,
         groupType: draggedItem.groupType || 'field',
+        dataField: draggedItem.dataField,
+        editorType: draggedItem.editorType,
+        label: { text: draggedItem.name },   // migrate name → label.text
+        visible: true,
         used: true,
       };
       targetRow.items.push(newField);
@@ -409,8 +412,12 @@
     else {
       // Add new default field or empty slot
       const newField = {
-        name: dragType === 'empty' ? "| |" : `Field${fieldCount.value}`,
-        groupType: dragType,
+        groupType: draggedItem.groupType || 'field',
+        dataField: draggedItem.dataField,
+        editorType: draggedItem.editorType,
+        label: { text: draggedItem.name },   // migrate name → label.text
+        visible: true,
+        used: true,
       };
       fieldCount.value++;
       targetRow.items.push(newField);
@@ -558,7 +565,7 @@
     selectedField.value.required = fieldProperties.value.required;
     selectedField.value.readonly = fieldProperties.value.readonly;
 
-    alert(`Field "${selectedField.value.name}" updated successfully.`);
+    alert(`Field "${selectedField.value.label?.text}" updated successfully.`);
   }
 
   axios.defaults.baseURL = 'http://127.0.0.1:8000';
