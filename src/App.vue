@@ -21,9 +21,9 @@
       <div v-for="(item, idx) in [...items, ...dynamicFields.filter(f => !f.used)]" :key = "idx" 
         :class="[
           'p-2 mb-2 cursor-move rounded',
-          item.type === 'container' ? 'bg-green-300' :
-          item.type === 'row' ? 'bg-teal-200' :
-          item.type === 'field' ? 'bg-yellow-200' :
+          item.groupType === 'container' ? 'bg-green-300' :
+          item.groupType === 'row' ? 'bg-teal-200' :
+          item.groupType === 'field' ? 'bg-yellow-200' :
           ''
         ]"
         draggable = "true" @dragstart="onDragStart(item, idx)"
@@ -51,7 +51,7 @@
           <div v-else @dblclick="editingContainerId = cIdx">
             {{ container.name }}
           </div>
-            <div v-for ="(child, rIdx) in container.children" :key="rIdx" class="bg-teal-200 p-2 rounded cursor-move min-h-[40px]"
+            <div v-for ="(child, rIdx) in container.items" :key="rIdx" class="bg-teal-200 p-2 rounded cursor-move min-h-[40px]"
             :draggable="dragType !== 'field'"
             @dragstart="(e) => { e.stopPropagation(); onDragStart(child, rIdx, null, cIdx); }"
             @dragover.stop.prevent
@@ -59,8 +59,8 @@
             >
               {{  }}
               <div class="flex flex-wrap gap-1">
-                <div v-for = "(field, fIdx) in child.fields" :key= "fIdx" :style = "{ width: `calc(${100 / child.fields.length}% - 0.5rem)` }" class="p-2 rounded cursor-move"
-                :class="field.type === 'empty' ? 'bg-white border border-dashed text-gray-400 italic' : 'bg-yellow-200'"
+                <div v-for = "(field, fIdx) in child.items" :key= "fIdx" :style = "{ width: `calc(${100 / child.items.length}% - 0.5rem)` }" class="p-2 rounded cursor-move"
+                :class="field.groupType === 'empty' ? 'bg-white border border-dashed text-gray-400 italic' : 'bg-yellow-200'"
                 draggable = "true"
                 @dragstart="(e) => { e.stopPropagation(); onDragStart(field, fIdx, rIdx, cIdx); }"
                 @dragover.prevent
@@ -70,7 +70,7 @@
                   class="block truncate"
                   :title="field.name"
                   >
-                  {{ field.type === 'empty' ? '| |' : field.name }}
+                  {{ field.groupType === 'empty' ? '| |' : field.name }}
                 </span>
                 </div>
               </div>
@@ -165,10 +165,10 @@
   import axios from 'axios';
 
   const items = ref([
-    { name: 'Row' , type: "row"},
-    { name: 'Container' , type: "container"},
-    { name: 'Field' , type: "field"},
-    { name: '| | Empty Slot' , type: "empty"}
+    { name: 'Row' , groupType: "row"},
+    { name: 'Container' , groupType: "container"},
+    { name: 'Field' , groupType: "field"},
+    { name: '| | Empty Slot' , groupType: "empty"}
   ]);
   const droppedContainers = ref([]);
 
@@ -187,8 +187,17 @@
   const selectedPlatform = ref('web');
   const saving = ref(false);
 
+  function updateColCounts() {
+    for (const container of droppedContainers.value) {
+      container.colCount = container.items?.length || 0;
+      for (const row of container.items || []) {
+        row.colCount = row.items?.length || 0;
+      }
+    }
+  }
+
   function onDragStart(item, itemIndex, parentRowIndex = null, parentContainerIndex = null) {
-    dragType = item.type;
+    dragType = item.groupType;
 
     // CLONE item if from panel, else use reference for layout items
     // We decide it's from the palette if parent indexes are null
@@ -238,19 +247,21 @@
     if (dragType === 'container' && draggedItem) {
       // Check if this is a fresh item (not yet added)
       if (draggedItem._fresh) {
-        // Add new container with unique name and empty children array
+        // Add new container with unique name and empty items array
         containerCount.value++;
         const newContainer = {
           name: `Container${containerCount.value}`,
-          type: 'container',
-          children: []
+          itemType: 'group',
+          groupType: 'container',
+          colCount: 0,
+          items: []
         };
         droppedContainers.value.push(newContainer);
       } else {
         console.warn("Ignored container drop in blank space because it's not a new item");
       }
     }
-    
+    updateColCounts();
     // Clear drag state
     draggedItem = null;
     dragType = null;
@@ -263,12 +274,12 @@
   }
 
   function onDropToContainerOrSwap(targetContainerIdx) {
-    if (!draggedItem || !dragType || !draggedItem.type) return;
+    if (!draggedItem || !dragType || !draggedItem.groupType) return;
 
-    if (dragType === 'row' && draggedItem.type === 'row') {
+    if (dragType === 'row' && draggedItem.groupType === 'row') {
       // Move or add the dragged row into the target container
       onDropToContainer(targetContainerIdx);
-    } else if (dragType === 'container' && draggedItem.type === 'container') {
+    } else if (dragType === 'container' && draggedItem.groupType === 'container') {
       // Swap two containers based on their index
       onDropToSwapContainer(targetContainerIdx);
     } else {
@@ -277,17 +288,18 @@
   }
 
   function onDropToRowOrSwap(targetContainerIdx, targetRowIdx) {
-    if (!draggedItem || !dragType || !draggedItem.type) return;
+    if (!draggedItem || !dragType || !draggedItem.groupType) return;
 
-    if (dragType === 'field' && draggedItem.type === 'field') {
+    if ((dragType === 'field' || dragType === 'empty') && (draggedItem.groupType === 'field' || draggedItem.groupType === 'empty')) {
       onDropToRow(targetContainerIdx, targetRowIdx);
     }
-    else if (dragType === 'row' && draggedItem.type === 'row') {
+    else if (dragType === 'row' && draggedItem.groupType === 'row') {
       onDropToSwapRow(targetContainerIdx, targetRowIdx);
     }
     else {
       console.warn(`Dropped ${dragType} with mismatched type`);
     }
+    updateColCounts();
   }
 
   function onDropToContainer(targetContainerIndex) {
@@ -298,12 +310,13 @@
 
     if (draggedItem._fresh) {
       const newRow = {
-        name: `Row${rowCount.value}`,
-        type: 'row',
-        fields: []
+        itemType: 'group',
+        groupType: 'row',
+        colCount: 0,
+        items: []
       };
       rowCount.value++;
-      targetContainer.children.push(newRow);
+      targetContainer.items.push(newRow);
     } 
     else {
       if (
@@ -315,11 +328,11 @@
         const originalContainer = droppedContainers.value[originalContainerIndex];
         if (!originalContainer) return;
 
-        const [movedRow] = originalContainer.children.splice(originalRowIndex, 1);
-        targetContainer.children.push(movedRow);
+        const [movedRow] = originalContainer.items.splice(originalRowIndex, 1);
+        targetContainer.items.push(movedRow);
       }
     }
-
+    updateColCounts()
     draggedItem = null;
     dragType = null;
     originalContainerIndex = null;
@@ -340,7 +353,7 @@
     const temp = arr[draggedContainerIndex];
     arr[draggedContainerIndex] = arr[targetContainerIndex];
     arr[targetContainerIndex] = temp;
-
+    updateColCounts();
     // Cleanup drag state
     draggedContainerIndex = null;
     draggedRowIndex = null;
@@ -357,19 +370,19 @@
     const targetContainer = droppedContainers.value[targetContainerIndex];
     if (!targetContainer) return;
 
-    const targetRow = targetContainer.children[targetRowIndex];
+    const targetRow = targetContainer.items[targetRowIndex];
     if (!targetRow) return;
 
-    if (!Array.isArray(targetRow.fields)) targetRow.fields = [];
+    if (!Array.isArray(targetRow.items)) targetRow.items = [];
 
     if (draggedItem && draggedItem._fresh) {
       // Dragging new dynamic field
       const newField = {
         ...draggedItem,
-        type: draggedItem.type || 'field',
+        groupType: draggedItem.groupType || 'field',
         used: true,
       };
-      targetRow.fields.push(newField);
+      targetRow.items.push(newField);
 
       // Mark dynamic field as used
       const matchingDynamic = dynamicFields.value.find(f => f.name === draggedItem.name);
@@ -384,25 +397,25 @@
       const originalContainer = droppedContainers.value[originalContainerIndex];
       if (!originalContainer) return;
 
-      const originalRow = originalContainer.children[originalRowIndex];
+      const originalRow = originalContainer.items[originalRowIndex];
       if (!originalRow) return;
 
       // Remove field from original row
-      const [movedField] = originalRow.fields.splice(draggedFieldIndex, 1);
+      const [movedField] = originalRow.items.splice(draggedFieldIndex, 1);
 
       // Add it to target row
-      targetRow.fields.push(movedField);
+      targetRow.items.push(movedField);
     } 
     else {
       // Add new default field or empty slot
       const newField = {
         name: dragType === 'empty' ? "| |" : `Field${fieldCount.value}`,
-        type: dragType,
+        groupType: dragType,
       };
       fieldCount.value++;
-      targetRow.fields.push(newField);
+      targetRow.items.push(newField);
     }
-
+    updateColCounts();
     draggedItem = null;
     dragType = null;
     draggedFieldIndex = null;
@@ -421,11 +434,11 @@
     if (!sourceContainer) return;
 
     // Take row from source
-    const [movingRow] = sourceContainer.children.splice(draggedRowIndex, 1);
+    const [movingRow] = sourceContainer.items.splice(draggedRowIndex, 1);
 
     if (draggedContainerIndex === targetContainerIdx) {
       // 🔹 Case 1: Same container → reorder by inserting at new index
-      const targetRows = droppedContainers.value[targetContainerIdx].children;
+      const targetRows = droppedContainers.value[targetContainerIdx].items;
 
       // Adjust index if dragging forward (because splice removed earlier element)
       const adjustedIndex = draggedRowIndex < targetRowIdx ? targetRowIdx - 1 : targetRowIdx;
@@ -436,9 +449,9 @@
       const targetContainer = droppedContainers.value[targetContainerIdx];
       if (!targetContainer) return;
 
-      targetContainer.children.splice(targetRowIdx, 0, movingRow);
+      targetContainer.items.splice(targetRowIdx, 0, movingRow);
     }
-
+    updateColCounts();
     // ✅ Cleanup
     draggedRowIndex = null;
     draggedContainerIndex = null;
@@ -455,7 +468,7 @@
       if (typeof originalContainerIndex === 'number' && typeof originalRowIndex === 'number') {
         const container = droppedContainers.value[originalContainerIndex];
         if (container) {
-          container.children.splice(originalRowIndex, 1);
+          container.items.splice(originalRowIndex, 1);
         }
       }
     } 
@@ -467,9 +480,9 @@
       ) {
         const container = droppedContainers.value[originalContainerIndex];
         if (container) {
-          const row = container.children[originalRowIndex];
-          if (row && Array.isArray(row.fields)) {
-            row.fields.splice(draggedFieldIndex, 1);
+          const row = container.items[originalRowIndex];
+          if (row && Array.isArray(row.items)) {
+            row.items.splice(draggedFieldIndex, 1);
           }
         }
       }
@@ -479,7 +492,7 @@
         droppedContainers.value.splice(draggedContainerIndex, 1);
       }
     }
-
+    updateColCounts();
     // Clear drag state
     draggedItem = null;
     dragType = null;
@@ -499,16 +512,16 @@
   });
 
   function extractFieldsFromJSON(groups) {
-    const fields = [];
+    const items = [];
 
     groups.forEach(group => {
       if (Array.isArray(group.items)) {
         group.items.forEach(item => {
           if (item.itemType === 'empty') return;
 
-          fields.push({
+          items.push({
             name: item.label?.text || item.dataField || "Unnamed Field",
-            type: 'field',
+            groupType: 'field',
             dataField: item.dataField,
             editorType: item.editorType,
             used: false
@@ -516,7 +529,7 @@
         });
       }
     });
-    return fields;
+    return items;
   }
 
   const selectedField = ref(null);
