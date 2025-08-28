@@ -382,8 +382,7 @@
         dataField: draggedItem.dataField,
         editorType: draggedItem.editorType,
         label: { text: draggedItem.name },   // migrate name → label.text
-        visible: true,
-        used: true,
+        visible: true
       };
       targetRow.items.push(newField);
 
@@ -416,8 +415,7 @@
         dataField: draggedItem.dataField,
         editorType: draggedItem.editorType,
         label: { text: draggedItem.name },   // migrate name → label.text
-        visible: true,
-        used: true,
+        visible: true
       };
       fieldCount.value++;
       targetRow.items.push(newField);
@@ -575,9 +573,15 @@
     const platform = selectedPlatform.value;  // e.g., 'web'
     try {
       const res = await axios.get(`http://127.0.0.1:8000/api/layouts/${type}/${platform}`);
-      droppedContainers.value = res.data ? res.data : [];
+      let data = res.data;
+      if (!Array.isArray(data)) {
+        console.warn("Expected array but got:", data);
+        data = [];
+      }
+      droppedContainers.value = data;
     }
     catch (e) {
+      console.error("API load failed:", e);
       droppedContainers.value = [];
     }
   }
@@ -590,8 +594,8 @@
       saving.value = true;
       const type = selectedType.value;
       const platform = selectedPlatform.value;
-      const jsonContent = JSON.stringify(droppedContainers.value, null, 2);
-      await axios.put(`http://127.0.0.1:8000/api/layouts/${type}/${platform}`, { content: jsonContent });
+      const cleaned = cleanJson(droppedContainers.value);
+      await axios.put(`http://127.0.0.1:8000/api/layouts/${type}/${platform}`, cleaned);
       alert("Layout saved and deployed!");
       await loadDropzoneStructure();  // Reload after save
     } catch (error) {
@@ -599,5 +603,19 @@
     } finally {
       saving.value = false;
     }
+  }
+
+  function cleanJson(obj) {
+    if (Array.isArray(obj)) {
+      return obj.map(cleanJson);
+    } else if (obj && typeof obj === "object") {
+      const newObj = {};
+      for (const key in obj) {
+        if (key === "_fresh" || key === "used") continue;  // 🔥 skip runtime keys
+        newObj[key] = cleanJson(obj[key]);
+      }
+      return newObj;
+    }
+    return obj;
   }
 </script>
