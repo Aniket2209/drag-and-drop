@@ -209,16 +209,12 @@
   function onDragStart(item, itemIndex, parentRowIndex = null, parentContainerIndex = null) {
     dragType = item.groupType;
 
-    // CLONE item if from panel, else use reference for layout items
+    isFromPalette = (parentRowIndex === null && parentContainerIndex === null);
     // We decide it's from the palette if parent indexes are null
-    if (parentContainerIndex === null && parentRowIndex === null) {
+    if (isFromPalette) {
       draggedItem = { ...item }; // shallow clone is enough for palette
-      draggedItem._fresh = true;
-      isFromPalette = true;
     } else {
       draggedItem = item;
-      draggedItem._fresh = false;
-      isFromPalette = false;
     }
 
     // Reset indexes
@@ -264,7 +260,7 @@
     );
     if (e.target !== e.currentTarget) return;
 
-    if (!(dragType === 'container' && draggedItem?._fresh && isFromPalette)) {
+    if (!(dragType === 'container' && isFromPalette)) {
       return;
     }
     containerCount.value++;
@@ -317,7 +313,7 @@
     const targetContainer = droppedContainers.value[targetContainerIndex];
     if (!targetContainer) return;
 
-    if (draggedItem._fresh) {
+    if (draggedItem && isFromPalette) {
       rowCount.value++;
       targetContainer.items.push(createRow());
     } 
@@ -340,6 +336,7 @@
     dragType = null;
     originalContainerIndex = null;
     originalRowIndex = null;
+    isFromPalette = false;
   }
 
   function onDropToSwapContainer(targetContainerIndex) {
@@ -365,6 +362,7 @@
     originalContainerIndex = null;
     originalRowIndex = null;
     draggedItem = null;
+    isFromPalette = false;
   }
 
   function onDropToRow(targetContainerIndex, targetRowIndex) {
@@ -378,7 +376,7 @@
 
     if (!Array.isArray(targetRow.items)) targetRow.items = [];
 
-    if (draggedItem && draggedItem._fresh) {
+    if (draggedItem && isFromPalette) {
       // Dragging new dynamic field
       targetRow.items.push(createField());
 
@@ -417,6 +415,7 @@
     draggedContainerIndex = null;
     originalContainerIndex = null;
     originalRowIndex = null;
+    isFromPalette = false;
   }
 
   function onDropToSwapRow(targetContainerIdx, targetRowIdx) {
@@ -453,6 +452,7 @@
     dragType = null;
     originalContainerIndex = null;
     originalRowIndex = null;
+    isFromPalette = false;
   }
 
   function onDropToDelete() {
@@ -583,8 +583,7 @@
       saving.value = true;
       const type = selectedType.value;
       const platform = selectedPlatform.value;
-      const cleaned = cleanJson(droppedContainers.value);
-      await axios.put(`http://127.0.0.1:8000/api/layouts/${type}/${platform}`, cleaned);
+      await axios.put(`http://127.0.0.1:8000/api/layouts/${type}/${platform}`, droppedContainers.value);
       alert("Layout saved and deployed!");
       await loadDropzoneStructure();  // Reload after save
     } catch (error) {
@@ -592,20 +591,6 @@
     } finally {
       saving.value = false;
     }
-  }
-
-  function cleanJson(obj) {
-    if (Array.isArray(obj)) {
-      return obj.map(cleanJson);
-    } else if (obj && typeof obj === "object") {
-      const newObj = {};
-      for (const key in obj) {
-        if (key === "_fresh" || key === "used") continue;  // 🔥 skip runtime keys
-        newObj[key] = cleanJson(obj[key]);
-      }
-      return newObj;
-    }
-    return obj;
   }
 
   function createContainer() 
