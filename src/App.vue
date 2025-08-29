@@ -32,11 +32,11 @@
       </div>
     </div>
     <div class="flex-1 p-4 border border-green-400 rounded"
-    @dragover.prevent @drop="onDropRoot">
+    @dragover.prevent @drop="onDropRoot($event)">
       <h2 class="font-bold mb-2">Selected Fields</h2>
         <div v-for = "(container, cIdx) in droppedContainers" :key = "cIdx" class="p-2 mb-2 bg-green-300 rounded"
         draggable = "true"
-        @dragstart = "() => onDragStart(container, cIdx)"
+        @dragstart = "(e) => { e.stopPropagation(); onDragStart(container, cIdx, null, 0); }"
         @dragover.stop.prevent
         @drop.stop="onDropToContainerOrSwap(cIdx)"
         >
@@ -179,6 +179,7 @@
   let originalContainerIndex = null;
   let originalRowIndex = null;
   let draggedItem = null;
+  let isFromPalette = false;
 
   const containerCount = ref(0)
   const rowCount = ref(1)
@@ -189,9 +190,18 @@
 
   function updateColCounts() {
     for (const container of droppedContainers.value) {
-      container.colCount = container.items?.length || 0;
+      if (!(selectedType.value === 'detail' && selectedPlatform.value === 'web')) {
+        container.colCount = container.items?.length || 0;
+      } else {
+        delete container.colCount; // ensure removed
+      }
+
       for (const row of container.items || []) {
-        row.colCount = row.items?.length || 0;
+        if (!(selectedType.value === 'detail' && selectedPlatform.value === 'web')) {
+          row.colCount = row.items?.length || 0;
+        } else {
+          delete row.colCount; // ensure removed
+        }
       }
     }
   }
@@ -204,9 +214,11 @@
     if (parentContainerIndex === null && parentRowIndex === null) {
       draggedItem = { ...item }; // shallow clone is enough for palette
       draggedItem._fresh = true;
+      isFromPalette = true;
     } else {
       draggedItem = item;
       draggedItem._fresh = false;
+      isFromPalette = false;
     }
 
     // Reset indexes
@@ -242,25 +254,21 @@
     console.log(`Drag Start - Type: ${dragType}, ContainerIdx: ${draggedContainerIndex}, RowIdx: ${draggedRowIndex}, FieldIdx: ${draggedFieldIndex}`);
   }
 
-  function onDropRoot() {
+  function onDropRoot(e) {
     // Only allow dropping new containers (created from available items panel)
-    if (dragType === 'container' && draggedItem) {
-      // Check if this is a fresh item (not yet added)
-      if (draggedItem._fresh) {
-        // Add new container with unique name and empty items array
-        containerCount.value++;
-        const newContainer = {
-          name: `Container${containerCount.value}`,
-          itemType: 'group',
-          groupType: 'container',
-          colCount: 0,
-          items: []
-        };
-        droppedContainers.value.push(newContainer);
-      } else {
-        console.warn("Ignored container drop in blank space because it's not a new item");
-      }
+    console.log(
+      'onDropRoot:',
+      'dragType:', dragType,
+      'draggedItem._fresh:', draggedItem?._fresh,
+      'isFromPalette:', isFromPalette
+    );
+    if (e.target !== e.currentTarget) return;
+
+    if (!(dragType === 'container' && draggedItem?._fresh && isFromPalette)) {
+      return;
     }
+    containerCount.value++;
+    droppedContainers.value.push(createContainer());
     updateColCounts();
     // Clear drag state
     draggedItem = null;
@@ -271,6 +279,7 @@
     draggedFieldIndex = null;
     originalContainerIndex = null;
     originalRowIndex = null;
+    isFromPalette = false;
   }
 
   function onDropToContainerOrSwap(targetContainerIdx) {
@@ -309,14 +318,8 @@
     if (!targetContainer) return;
 
     if (draggedItem._fresh) {
-      const newRow = {
-        itemType: 'group',
-        groupType: 'row',
-        colCount: 0,
-        items: []
-      };
       rowCount.value++;
-      targetContainer.items.push(newRow);
+      targetContainer.items.push(createRow());
     } 
     else {
       if (
@@ -377,14 +380,7 @@
 
     if (draggedItem && draggedItem._fresh) {
       // Dragging new dynamic field
-      const newField = {
-        groupType: draggedItem.groupType || 'field',
-        dataField: draggedItem.dataField,
-        editorType: draggedItem.editorType,
-        label: { text: draggedItem.name },   // migrate name → label.text
-        visible: true
-      };
-      targetRow.items.push(newField);
+      targetRow.items.push(createField());
 
       // Mark dynamic field as used
       const matchingDynamic = dynamicFields.value.find(f => f.name === draggedItem.name);
@@ -410,15 +406,8 @@
     } 
     else {
       // Add new default field or empty slot
-      const newField = {
-        groupType: draggedItem.groupType || 'field',
-        dataField: draggedItem.dataField,
-        editorType: draggedItem.editorType,
-        label: { text: draggedItem.name },   // migrate name → label.text
-        visible: true
-      };
       fieldCount.value++;
-      targetRow.items.push(newField);
+      targetRow.items.push(createField());
     }
     updateColCounts();
     draggedItem = null;
@@ -617,5 +606,126 @@
       return newObj;
     }
     return obj;
+  }
+
+  function createContainer() 
+  {
+    if(selectedPlatform.value === 'web')
+    {
+      if(selectedType.value === 'list' || selectedType.value === 'edit')
+      {
+        return {
+          name: `Container${containerCount.value}`,
+          itemType: 'group',
+          groupType: 'container',
+          colCount: 0,
+          items: []
+        };
+      }
+      else if(selectedType.value === 'detail')
+      {
+        return {
+          name: `Container${containerCount.value}`,
+          itemType: 'group',
+          groupType: 'container',
+          items: []
+        };
+      }
+    }
+    else if(selectedPlatform.value === 'android')
+    {
+      if(selectedType.value === 'list')
+      {
+        console.log("Sorry Not Supported Yet!");
+      }
+      else if(selectedType.value === 'edit')
+      {
+        console.log("Sorry Not Supported Yet!");
+      }
+      else if(selectedType.value === 'detail')
+      {
+        console.log("Sorry Not Supported Yet!");
+      }
+    }
+  }
+
+  function createRow()
+  {
+    if(selectedPlatform.value === 'web')
+    {
+      if(selectedType.value === 'list' || selectedType.value === 'edit')
+      {
+        return {
+          itemType: 'group',
+          groupType: 'row',
+          colCount: 0,
+          items: []
+        };
+      }
+      else if(selectedType.value === 'detail')
+      {
+        return {
+          itemType: 'group',
+          groupType: 'row',
+          items: []
+        };
+      }
+    }
+    else if(selectedPlatform.value === 'android')
+    {
+      if(selectedType.value === 'list')
+      {
+        console.log("Sorry Not Supported Yet!");
+      }
+      else if(selectedType.value === 'edit')
+      {
+        console.log("Sorry Not Supported Yet!");
+      }
+      else if(selectedType.value === 'detail')
+      {
+        console.log("Sorry Not Supported Yet!");
+      }
+    }
+  }
+
+  function createField()
+  {
+    if(selectedPlatform.value === 'web')
+    {
+      if(selectedType.value === 'list')
+      {
+        return {
+          groupType: draggedItem.groupType || 'field',
+          dataField: draggedItem.dataField,
+          editorType: draggedItem.editorType,
+          label: { text: draggedItem.name },   // migrate name → label.text
+          visible: true
+        };
+      }
+      else if(selectedType.value === 'edit' || selectedType.value === 'detail')
+      {
+        return {
+          groupType: draggedItem.groupType || 'field',
+          dataField: draggedItem.dataField,
+          editorType: draggedItem.editorType,
+          label: { text: draggedItem.name },   // migrate name → label.text
+        };
+      }
+    }
+    else if(selectedPlatform.value === 'android')
+    {
+      if(selectedType.value === 'list')
+      {
+        console.log("Sorry Not Supported Yet!");
+      }
+      else if(selectedType.value === 'edit')
+      {
+        console.log("Sorry Not Supported Yet!");
+      }
+      else if(selectedType.value === 'detail')
+      {
+        console.log("Sorry Not Supported Yet!");
+      }
+    }
   }
 </script>
