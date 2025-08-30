@@ -26,13 +26,14 @@
           item.groupType === 'field' ? 'bg-yellow-200' :
           ''
         ]"
-        draggable = "true" @dragstart="onDragStart(item, idx)"
+        draggable = "true" @dragstart="(e) => onDragStart(item, idx, null, null, e)"
         >
         {{ item.name }}
       </div>
     </div>
     <div class="flex-1 p-4 border border-green-400 rounded"
-    @dragover.prevent @drop="onDropRoot($event)">
+    @dragover.prevent @drop="onDropRoot($event)"
+    :class = "{ 'shake': rootShake }">
       <h2 class="font-bold mb-2">Selected Fields</h2>
         <div v-for = "(container, cIdx) in droppedContainers" :key = "cIdx" class="p-2 mb-2 bg-green-300 rounded"
         draggable = "true"
@@ -180,6 +181,7 @@
   let originalRowIndex = null;
   let draggedItem = null;
   let isFromPalette = false;
+  let dragCursorEl = null;
 
   const containerCount = ref(0)
   const rowCount = ref(1)
@@ -187,6 +189,7 @@
   const selectedType = ref('list');
   const selectedPlatform = ref('web');
   const saving = ref(false);
+  const rootShake = ref(false);
 
   function updateColCounts() {
     for (const container of droppedContainers.value) {
@@ -206,7 +209,7 @@
     }
   }
 
-  function onDragStart(item, itemIndex, parentRowIndex = null, parentContainerIndex = null) {
+  function onDragStart(item, itemIndex, parentRowIndex = null, parentContainerIndex = null, event) {
     dragType = item.groupType;
 
     isFromPalette = (parentRowIndex === null && parentContainerIndex === null);
@@ -248,6 +251,15 @@
         break;
     }
     console.log(`Drag Start - Type: ${dragType}, ContainerIdx: ${draggedContainerIndex}, RowIdx: ${draggedRowIndex}, FieldIdx: ${draggedFieldIndex}`);
+    event.dataTransfer.setDragImage(new Image(), 0, 0);
+
+    dragCursorEl = document.createElement("div");
+    dragCursorEl.className = "drag-cursor";
+    dragCursorEl.innerText = item.name || item.groupType;
+    dragCursorEl.setAttribute("style", getCursorStyle(item.groupType));
+    document.body.appendChild(dragCursorEl);
+
+    document.addEventListener("dragover", moveCustomCursor);
   }
 
   function onDropRoot(e) {
@@ -261,6 +273,10 @@
     if (e.target !== e.currentTarget) return;
 
     if (!(dragType === 'container' && isFromPalette)) {
+      rootShake.value = true;
+      setTimeout(() => {
+        rootShake.value = false;
+      }, 300);
       return;
     }
     containerCount.value++;
@@ -276,6 +292,7 @@
     originalContainerIndex = null;
     originalRowIndex = null;
     isFromPalette = false;
+    clearDragState();
   }
 
   function onDropToContainerOrSwap(targetContainerIdx) {
@@ -288,6 +305,10 @@
       // Swap two containers based on their index
       onDropToSwapContainer(targetContainerIdx);
     } else {
+      rootShake.value = true;
+      setTimeout(() => {
+        rootShake.value = false;
+      }, 300);
       console.warn(`Dropped ${dragType} with mismatched type`);
     }
   }
@@ -302,6 +323,10 @@
       onDropToSwapRow(targetContainerIdx, targetRowIdx);
     }
     else {
+      rootShake.value = true;
+      setTimeout(() => {
+        rootShake.value = false;
+      }, 300);
       console.warn(`Dropped ${dragType} with mismatched type`);
     }
     updateColCounts();
@@ -337,6 +362,7 @@
     originalContainerIndex = null;
     originalRowIndex = null;
     isFromPalette = false;
+    clearDragState();
   }
 
   function onDropToSwapContainer(targetContainerIndex) {
@@ -363,6 +389,7 @@
     originalRowIndex = null;
     draggedItem = null;
     isFromPalette = false;
+    clearDragState();
   }
 
   function onDropToRow(targetContainerIndex, targetRowIndex) {
@@ -416,6 +443,7 @@
     originalContainerIndex = null;
     originalRowIndex = null;
     isFromPalette = false;
+    clearDragState();
   }
 
   function onDropToSwapRow(targetContainerIdx, targetRowIdx) {
@@ -453,6 +481,7 @@
     originalContainerIndex = null;
     originalRowIndex = null;
     isFromPalette = false;
+    clearDragState();
   }
 
   function onDropToDelete() {
@@ -713,4 +742,65 @@
       }
     }
   }
+  function moveCustomCursor(e) {
+    if (dragCursorEl) {
+      dragCursorEl.style.left = e.pageX + "px";
+      dragCursorEl.style.top = e.pageY + "px";
+    }
+  }
+
+  function clearDragState() {
+    // call this in onDropRoot, onDropToContainer, onDropToRow etc.
+    document.removeEventListener("dragover", moveCustomCursor);
+    if (dragCursorEl) {
+      dragCursorEl.remove();
+      dragCursorEl = null;
+    }
+    document.body.classList.remove("dragging");
+  }
+
+  function getCursorStyle(groupType) {
+    switch (groupType) {
+      case "container":
+        return "background: #86efac; color: black;"; // Tailwind green-300
+      case "row":
+        return "background: #7dd3fc; color: black;"; // Tailwind sky-300
+      case "field":
+        return "background: #fde68a; color: black;"; // Tailwind yellow-300
+      case "empty":
+        return "background: #FFFFFF; color: black;";
+      default:
+        return "background: rgba(59, 130, 246, 0.9); color: white;"; // fallback blue
+    }
+  }
+
+  onMounted(() => {
+    document.addEventListener("drop", clearDragState);
+    document.addEventListener("dragend", clearDragState);
+  });
 </script>
+
+<style>
+  .drag-cursor {
+    position: absolute;
+    pointer-events: none;
+    z-index: 9999;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    transform: translate(-50%, -50%);
+  }
+
+  @keyframes shake {
+    0%   { transform: translateX(0); }
+    20%  { transform: translateX(-5px); }
+    40%  { transform: translateX(5px); }
+    60%  { transform: translateX(-5px); }
+    80%  { transform: translateX(5px); }
+    100% { transform: translateX(0); }
+  }
+
+  .shake {
+    animation: shake 0.3s ease-in-out;
+  }
+</style>
