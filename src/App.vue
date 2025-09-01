@@ -38,8 +38,10 @@
         <div v-for = "(container, cIdx) in droppedContainers" :key = "cIdx" class="p-2 mb-2 bg-green-300 rounded"
         draggable = "true"
         @dragstart = "(e) => { e.stopPropagation(); onDragStart(container, cIdx, null, 0); }"
-        @dragover.stop.prevent
+        @dragover.stop.prevent="onDragOverContainer(cIdx, $event)"
+        @dragleave.stop="onDragLeaveContainer(cIdx, $event)"
         @drop.stop="onDropToContainerOrSwap(cIdx)"
+        :class="{'border-4 border-blue-400': highlightedContainerDropIndex === cIdx}"
         >
           <div v-if="editingContainerId === cIdx">
             <input
@@ -53,10 +55,14 @@
             {{ container.name }}
           </div>
             <div v-for ="(child, rIdx) in container.items" :key="rIdx" class="bg-teal-200 p-2 rounded cursor-move min-h-[40px]"
+            :class="{
+              'border-4 border-blue-400': highlightedContainerIndex === cIdx && highlightedRowIndex === rIdx
+            }"
             :draggable="dragType !== 'field'"
             @dragstart="(e) => { e.stopPropagation(); onDragStart(child, rIdx, null, cIdx); }"
-            @dragover.stop.prevent
+            @dragover.stop.prevent="onDragOverRow(cIdx, rIdx, $event)"
             @drop.stop="onDropToRowOrSwap(cIdx, rIdx)"
+            @dragleave="() => onDragLeaveRow(cIdx, rIdx)"
             >
               {{  }}
               <div class="flex flex-wrap gap-1">
@@ -190,6 +196,9 @@
   const selectedPlatform = ref('web');
   const saving = ref(false);
   const rootShake = ref(false);
+  const highlightedContainerIndex = ref(null);
+  const highlightedRowIndex = ref(null);
+  const highlightedContainerDropIndex = ref(null);
 
   function updateColCounts() {
     for (const container of droppedContainers.value) {
@@ -263,36 +272,45 @@
   }
 
   function onDropRoot(e) {
-    // Only allow dropping new containers (created from available items panel)
-    console.log(
-      'onDropRoot:',
-      'dragType:', dragType,
-      'draggedItem._fresh:', draggedItem?._fresh,
-      'isFromPalette:', isFromPalette
-    );
-    if (e.target !== e.currentTarget) return;
-
-    if (!(dragType === 'container' && isFromPalette)) {
+    if (selectedType.value === 'list' && selectedPlatform.value === 'android')
+    {
       rootShake.value = true;
-      setTimeout(() => {
-        rootShake.value = false;
-      }, 300);
+      setTimeout(() => { rootShake.value = false;}, 300);
       return;
     }
-    containerCount.value++;
-    droppedContainers.value.push(createContainer());
-    updateColCounts();
-    // Clear drag state
-    draggedItem = null;
-    dragType = null;
-    // Clear stored source indexes instead of IDs
-    draggedContainerIndex = null;
-    draggedRowIndex = null;
-    draggedFieldIndex = null;
-    originalContainerIndex = null;
-    originalRowIndex = null;
-    isFromPalette = false;
-    clearDragState();
+    else
+    {
+      // Only allow dropping new containers (created from available items panel)
+      console.log(
+        'onDropRoot:',
+        'dragType:', dragType,
+        'draggedItem._fresh:', draggedItem?._fresh,
+        'isFromPalette:', isFromPalette
+      );
+      if (e.target !== e.currentTarget) return;
+
+      if (!(dragType === 'container' && isFromPalette)) {
+        rootShake.value = true;
+        setTimeout(() => {
+          rootShake.value = false;
+        }, 300);
+        return;
+      }
+      containerCount.value++;
+      droppedContainers.value.push(createContainer());
+      updateColCounts();
+      // Clear drag state
+      draggedItem = null;
+      dragType = null;
+      // Clear stored source indexes instead of IDs
+      draggedContainerIndex = null;
+      draggedRowIndex = null;
+      draggedFieldIndex = null;
+      originalContainerIndex = null;
+      originalRowIndex = null;
+      isFromPalette = false;
+      clearDragState();
+    }
   }
 
   function onDropToContainerOrSwap(targetContainerIdx) {
@@ -356,12 +374,13 @@
         targetContainer.items.push(movedRow);
       }
     }
-    updateColCounts()
+    updateColCounts();
     draggedItem = null;
     dragType = null;
     originalContainerIndex = null;
     originalRowIndex = null;
     isFromPalette = false;
+    highlightedContainerDropIndex.value = null;
     clearDragState();
   }
 
@@ -443,6 +462,8 @@
     originalContainerIndex = null;
     originalRowIndex = null;
     isFromPalette = false;
+    highlightedContainerIndex.value = null;
+    highlightedRowIndex.value = null;
     clearDragState();
   }
 
@@ -587,11 +608,17 @@
   axios.defaults.baseURL = 'http://127.0.0.1:8000';
 
   async function loadDropzoneStructure() {
-    const type = selectedType.value;     // e.g., 'list'
-    const platform = selectedPlatform.value;  // e.g., 'web'
     try {
-      const res = await axios.get(`http://127.0.0.1:8000/api/layouts/${type}/${platform}`);
+      const res = await axios.get(`http://127.0.0.1:8000/api/layouts/${selectedType.value}/${selectedPlatform.value}`);
       let data = res.data;
+      if(selectedType.value === 'list' && selectedPlatform.value === 'android')
+      {
+        const valid = Array.isArray(data) && data.length === 2 && data.every(c => c.groupType === 'row' || c.groupType === 'column');
+        if (!valid) {
+          initAndroidListLayout();
+          return;
+        }
+      }
       if (!Array.isArray(data)) {
         console.warn("Expected array but got:", data);
         data = [];
@@ -600,7 +627,12 @@
     }
     catch (e) {
       console.error("API load failed:", e);
-      droppedContainers.value = [];
+      if (selectedType.value === 'list' && selectedPlatform.value === 'android') {
+        initAndroidListLayout();
+      }
+      else {
+        droppedContainers.value = [];
+      }
     }
   }
 
@@ -648,11 +680,7 @@
     }
     else if(selectedPlatform.value === 'android')
     {
-      if(selectedType.value === 'list')
-      {
-        console.log("Sorry Not Supported Yet!");
-      }
-      else if(selectedType.value === 'edit')
+      if(selectedType.value === 'edit')
       {
         console.log("Sorry Not Supported Yet!");
       }
@@ -774,10 +802,64 @@
     }
   }
 
+  function onDragOverRow(containerIdx, rowIdx, event) {
+    if (dragType !== 'field' && dragType !== 'empty') {
+      highlightedContainerIndex.value = null;
+      highlightedRowIndex.value = null;
+      return;
+    }
+    highlightedContainerIndex.value = containerIdx;
+    highlightedRowIndex.value = rowIdx;
+  }
+
+  function onDragLeaveRow(containerIdx, rowIdx) {
+    if (
+      highlightedContainerIndex.value === containerIdx &&
+      highlightedRowIndex.value === rowIdx
+    ) {
+      highlightedContainerIndex.value = null;
+      highlightedRowIndex.value = null;
+    }
+  }
+
+  function onDragOverContainer(cIdx, event) {
+    // Only highlight when dragging a row
+    if (dragType !== 'row') {
+      highlightedContainerDropIndex.value = null;
+      return;
+    }
+    highlightedContainerDropIndex.value = cIdx;
+  }
+
+  function onDragLeaveContainer(cIdx, event) {
+    if (highlightedContainerDropIndex.value === cIdx) {
+      highlightedContainerDropIndex.value = null;
+    }
+  }
+
   onMounted(() => {
     document.addEventListener("drop", clearDragState);
     document.addEventListener("dragend", clearDragState);
   });
+
+  function initAndroidListLayout() {
+    droppedContainers.value = JSON.parse(JSON.stringify([
+      {
+        editorType: "group",
+        groupType: "container",
+        horizontal_align: "center",
+        vertical_align: "center",
+        items: []
+      },
+      {
+        editorType: "group",
+        groupType: "container",
+        template: "expandable",
+        horizontal_alignment: "start",
+        items: []
+      }
+    ]));
+  }
 </script>
 
 <style>
