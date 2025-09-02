@@ -96,52 +96,88 @@
         v-if="selectedField"
         class="p-4 border border-gray-400 rounded bg-white shadow-md max-w-sm"
       >
-        <h3 class="font-semibold mb-2">Field Properties</h3>
-        <div class="mb-2">
-          <label class="block text-sm font-medium text-gray-700">Label:</label>
-          <input
-            type="text"
-            class="mt-1 block w-full border border-gray-300 rounded px-2 py-1"
-            v-model="selectedField.label.text"
-            disabled
-          />
-        </div>
-        <div class="mb-2">
-          <label class="block text-sm font-medium text-gray-700">Editor Type:</label>
-          <input
-            type="text"
-            class="mt-1 block w-full border border-gray-300 rounded px-2 py-1"
-            v-model="selectedField.editorType"
-            disabled
-          />
-        </div>
-        <div class="mb-2">
-          <label class="block text-sm font-medium text-gray-700">Width:</label>
-          <input
-            type="text"
-            placeholder="Enter width"
-            class="mt-1 block w-full border border-gray-300 rounded px-2 py-1"
-            v-model="fieldProperties.width"
-          />
-        </div>
-        <div class="flex items-center space-x-4 mt-3">
-          <label class="inline-flex items-center">
+        <template v-if="selectedPlatform === 'web'">
+          <h3 class="font-semibold mb-2">Field Properties</h3>
+          <div class="mb-2">
+            <label class="block text-sm font-medium text-gray-700">Label:</label>
             <input
-              type="checkbox"
-              class="form-checkbox"
-              v-model="fieldProperties.required"
+              type="text"
+              class="mt-1 block w-full border border-gray-300 rounded px-2 py-1"
+              v-model="selectedField.label.text"
+              disabled
             />
-            <span class="ml-2 text-sm text-gray-700">Required</span>
-          </label>
-          <label class="inline-flex items-center">
+          </div>
+          <div class="mb-2">
+            <label class="block text-sm font-medium text-gray-700">Editor Type:</label>
             <input
-              type="checkbox"
-              class="form-checkbox"
-              v-model="fieldProperties.readonly"
+              type="text"
+              class="mt-1 block w-full border border-gray-300 rounded px-2 py-1"
+              v-model="selectedField.editorType"
+              disabled
             />
-            <span class="ml-2 text-sm text-gray-700">Read Only</span>
-          </label>
-        </div>
+          </div>
+          <div class="mb-2">
+            <label class="block text-sm font-medium text-gray-700">Width:</label>
+            <input
+              type="text"
+              placeholder="Enter width"
+              class="mt-1 block w-full border border-gray-300 rounded px-2 py-1"
+              v-model="fieldProperties.width"
+            />
+          </div>
+          <div class="flex items-center space-x-4 mt-3">
+            <label class="inline-flex items-center">
+              <input
+                type="checkbox"
+                class="form-checkbox"
+                v-model="fieldProperties.required"
+              />
+              <span class="ml-2 text-sm text-gray-700">Required</span>
+            </label>
+            <label class="inline-flex items-center">
+              <input
+                type="checkbox"
+                class="form-checkbox"
+                v-model="fieldProperties.readonly"
+              />
+              <span class="ml-2 text-sm text-gray-700">Read Only</span>
+            </label>
+          </div>
+        </template>
+        <template v-if="selectedPlatform === 'android'">
+          <h3 class="font-semibold mb-2">Field Properties</h3>
+          <div class="mb-2">
+            <label class="block text-sm font-medium">Size:</label>
+            <input v-model="fieldProperties.size" type="number" class="mt-1 block w-full border rounded px-2 py-1" />
+          </div>
+          <div class="mb-2">
+            <label class="block text-sm font-medium">Font Size:</label>
+            <input v-model="fieldProperties.font_size" type="number" class="mt-1 block w-full border rounded px-2 py-1" />
+          </div>
+          <div class="mb-2">
+            <label class="block text-sm font-medium">Font Weight:</label>
+            <input v-model="fieldProperties.font_weight" type="text" placeholder="normal, bold, semi-bold" class="mt-1 block w-full border rounded px-2 py-1" />
+          </div>
+          <h4 class="font-semibold mt-4 mb-2">Padding</h4>
+          <div class="flex gap-2 mb-2">
+            <div>
+              <label class="block text-xs">Top</label>
+              <input v-model="fieldProperties.padding_top" type="number" class="w-16 border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label class="block text-xs">Right</label>
+              <input v-model="fieldProperties.padding_right" type="number" class="w-16 border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label class="block text-xs">Bottom</label>
+              <input v-model="fieldProperties.padding_bottom" type="number" class="w-16 border rounded px-2 py-1" />
+            </div>
+            <div>
+              <label class="block text-xs">Left</label>
+              <input v-model="fieldProperties.padding_left" type="number" class="w-16 border rounded px-2 py-1" />
+            </div>
+          </div>
+        </template>
         <button
           @click="applyFieldProperties"
           class="mt-4 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
@@ -202,14 +238,14 @@
 
   function updateColCounts() {
     for (const container of droppedContainers.value) {
-      if (!(selectedType.value === 'detail' && selectedPlatform.value === 'web')) {
+      if (!((selectedType.value === 'detail' && selectedPlatform.value === 'web') || (selectedPlatform.value === 'android' && selectedType.value === 'list'))) {
         container.colCount = container.items?.length || 0;
       } else {
         delete container.colCount; // ensure removed
       }
 
       for (const row of container.items || []) {
-        if (!(selectedType.value === 'detail' && selectedPlatform.value === 'web')) {
+        if (!((selectedType.value === 'detail' && selectedPlatform.value === 'web') || (selectedPlatform.value === 'android' && selectedType.value === 'list'))) {
           row.colCount = row.items?.length || 0;
         } else {
           delete row.colCount; // ensure removed
@@ -358,8 +394,14 @@
 
     if (draggedItem && isFromPalette) {
       rowCount.value++;
-      targetContainer.items.push(createRow());
-    } 
+      if(targetContainer.template === "expandable")
+      {
+        targetContainer.items.push(createRow(true));
+      }
+      else{
+        targetContainer.items.push(createRow(false));
+      }
+    }
     else {
       if (
         typeof originalContainerIndex === 'number' &&
@@ -581,6 +623,17 @@
     width: '',
     required: false,
     readonly: false,
+    size: '',
+    font_size: '',
+    font_weight: '',
+    padding_top: 0,
+    padding_right: 0,
+    padding_bottom: 0,
+    padding_left: 0,
+  });
+
+  watch([selectedType, selectedPlatform], () => {
+    selectedField.value = null;
   });
 
   function onFieldClick(field)
@@ -591,6 +644,12 @@
       width: field.width || '',
       required: !!field.required,
       readonly: !!field.readonly,
+      size: field.size || '',
+      font_size: field.font_size || '',
+      padding_top: field.padding?.top ?? 0,
+      padding_right: field.padding?.right ?? 0,
+      padding_bottom: field.padding?.bottom ?? 0,
+      padding_left: field.padding?.left ?? 0,
     };
   }
 
@@ -598,9 +657,46 @@
   {
     if (!selectedField.value) return;
 
-    selectedField.value.width = fieldProperties.value.width;
-    selectedField.value.required = fieldProperties.value.required;
-    selectedField.value.readonly = fieldProperties.value.readonly;
+    if (selectedPlatform.value === "web") {
+      selectedField.value.width = fieldProperties.value.width || undefined;
+      selectedField.value.required = !!fieldProperties.value.required;
+      selectedField.value.readonly = !!fieldProperties.value.readonly;
+    }
+    else {
+      delete selectedField.value.width;
+      delete selectedField.value.required;
+      delete selectedField.value.readonly;
+    }
+    if (selectedPlatform.value === "android") {
+      if (selectedPlatform.value.size !== '') selectedField.value.size = Number(fieldProperties.value.size);
+      else delete selectedField.value.size;
+
+      if (fieldProperties.value.font_size !== '') selectedField.value.font_size = Number(fieldProperties.value.font_size);
+      else delete selectedField.value.font_size;
+
+      if (fieldProperties.value.font_weight !== '') selectedField.value.font_weight = Number(fieldProperties.value.font_weight);
+      else delete selectedField.value.font_weight;
+
+      const paddings = ['padding_top', 'padding_right', 'padding_bottom', 'padding_left'].map(d => Number(fieldProperties.value[d]) || 0);
+      if (paddings.some(val => val !== 0)) {
+        selectedField.value.padding = {
+          top: paddings[0],
+          right: paddings[1],
+          bottom: paddings[2],
+          left: paddings[3],
+        };
+      } 
+      else {
+        delete selectedField.value.padding;
+      }
+    } 
+    else {
+      // Remove Android-specific fields for web or other platforms
+      delete selectedField.value.size;
+      delete selectedField.value.font_size;
+      delete selectedField.value.font_weight;
+      delete selectedField.value.padding;
+    }
 
     alert(`Field "${selectedField.value.label?.text}" updated successfully.`);
   }
@@ -613,7 +709,7 @@
       let data = res.data;
       if(selectedType.value === 'list' && selectedPlatform.value === 'android')
       {
-        const valid = Array.isArray(data) && data.length === 2 && data.every(c => c.groupType === 'row' || c.groupType === 'column');
+        const valid = Array.isArray(data) && data.length === 2 && data.every(c => c.groupType === 'row' || c.groupType === 'row');
         if (!valid) {
           initAndroidListLayout();
           return;
@@ -691,7 +787,7 @@
     }
   }
 
-  function createRow()
+  function createRow(hasTemplate)
   {
     if(selectedPlatform.value === 'web')
     {
@@ -717,7 +813,47 @@
     {
       if(selectedType.value === 'list')
       {
-        console.log("Sorry Not Supported Yet!");
+        if(hasTemplate)
+        {
+          return {
+            editorType: "group",
+            font_size: 18,
+            font_weight: "normal",
+            groupType: 'row',
+            horizontal_align: "center",
+            font_weight: "normal",
+            text_align: "center",
+            padding: 0,
+            label: { text: "Email" },
+            items: []
+          };
+        }
+        else
+        {
+          return {
+            editorType: "displayTextInitials",
+            groupType: "row",
+            vertical_alignment: "top",
+            horizontal_alignment: "start",
+            icon: "location",
+            size: 30,
+            action: {
+              type: "navigate",
+              destination: "",
+              actionType: ""
+            },
+            padding: {
+              top: 10,
+              bottom: 10
+            },
+            bgColor: "#FF5599FF",
+            textColor: "#FFFFFFFF",
+            label: {
+              text: "Email"
+            },
+            items: []
+          };
+        }
       }
       else if(selectedType.value === 'edit')
       {
@@ -758,7 +894,23 @@
     {
       if(selectedType.value === 'list')
       {
-        console.log("Sorry Not Supported Yet!");
+        return {
+          editorType: draggedItem.editorType,
+          groupType: draggedItem.groupType || 'field',
+          icon: "call_color",
+          size: 28,
+          font_size: 18,
+          font_weight: "semi-bold",
+          action: {
+            type: ""
+          },
+          label: {
+            text: draggedItem.name
+          },
+          padding: {
+            right: 7
+          }
+        };
       }
       else if(selectedType.value === 'edit')
       {
@@ -845,6 +997,7 @@
   function initAndroidListLayout() {
     droppedContainers.value = JSON.parse(JSON.stringify([
       {
+        name: "Default Container",
         editorType: "group",
         groupType: "container",
         horizontal_align: "center",
@@ -852,6 +1005,7 @@
         items: []
       },
       {
+        name: "Expendable Container",
         editorType: "group",
         groupType: "container",
         template: "expandable",
