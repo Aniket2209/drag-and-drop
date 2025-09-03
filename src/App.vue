@@ -20,7 +20,7 @@
       <h2 class="font-bold mb-2">Available Fields</h2>
       <div v-for="(item, idx) in [...items, ...dynamicFields.filter(f => !f.used)]" :key = "idx" 
         :class="[
-          'p-2 mb-2 cursor-move rounded',
+          'p-2 mb-2 rounded',
           item.groupType === 'container' ? 'bg-green-300' :
           item.groupType === 'row' ? 'bg-teal-200' :
           item.groupType === 'field' ? 'bg-yellow-200' :
@@ -54,7 +54,7 @@
           <div v-else @dblclick="editingContainerId = cIdx">
             {{ container.name }}
           </div>
-            <div v-for ="(child, rIdx) in container.items" :key="rIdx" class="bg-teal-200 p-2 rounded cursor-move min-h-[40px]"
+            <div v-for ="(child, rIdx) in container.items" :key="rIdx" class="bg-teal-200 p-2 rounded min-h-[40px] mb-2"
             :class="{
               'border-4 border-blue-400': highlightedContainerIndex === cIdx && highlightedRowIndex === rIdx
             }"
@@ -66,7 +66,7 @@
             >
               {{  }}
               <div class="flex flex-wrap gap-1">
-                <div v-for = "(field, fIdx) in child.items" :key= "fIdx" :style = "{ width: `calc(${100 / child.items.length}% - 0.5rem)` }" class="p-2 rounded cursor-move"
+                <div v-for = "(field, fIdx) in child.items" :key= "fIdx" :style = "{ width: `calc(${100 / child.items.length}% - 0.5rem)` }" class="p-2 rounded"
                 :class="field.groupType === 'empty' ? 'bg-white border border-dashed text-gray-400 italic' : 'bg-yellow-200'"
                 draggable = "true"
                 @dragstart="(e) => { e.stopPropagation(); onDragStart(field, fIdx, rIdx, cIdx); }"
@@ -210,7 +210,6 @@
   const items = ref([
     { name: 'Row' , groupType: "row"},
     { name: 'Container' , groupType: "container"},
-    { name: 'Field' , groupType: "field"},
     { name: '| | Empty Slot' , groupType: "empty"}
   ]);
   const droppedContainers = ref([]);
@@ -618,6 +617,31 @@
     return items;
   }
 
+  function extractUsedFieldNames(structure) {
+    const used = new Set();
+    structure.forEach(container => {
+      (container.items || []).forEach(row => {
+        (row.items || []).forEach(field => {
+          if (field.dataField) {
+            used.add(field.dataField);
+          } 
+          else if (field.label?.text) {
+            used.add(field.label.text);
+          }
+        })
+      })
+    })
+    return used;
+  }
+
+  function syncDynamicFieldsWithLayout() {
+    const fieldsFromFile = extractFieldsFromJSON(customFieldJSON);
+    const usedFields = extractUsedFieldNames(droppedContainers.value);
+    dynamicFields.value = fieldsFromFile.filter(
+      field => !usedFields.has(field.dataField || field.label?.text)
+    );
+  }
+
   const selectedField = ref(null);
   const fieldProperties = ref({
     width: '',
@@ -709,7 +733,7 @@
       let data = res.data;
       if(selectedType.value === 'list' && selectedPlatform.value === 'android')
       {
-        const valid = Array.isArray(data) && data.length === 2 && data.every(c => c.groupType === 'row' || c.groupType === 'row');
+        const valid = Array.isArray(data) && data.length === 2 && data.every(c => c.groupType === 'container');
         if (!valid) {
           initAndroidListLayout();
           return;
@@ -720,6 +744,7 @@
         data = [];
       }
       droppedContainers.value = data;
+      syncDynamicFieldsWithLayout();
     }
     catch (e) {
       console.error("API load failed:", e);
@@ -734,6 +759,7 @@
 
   onMounted(loadDropzoneStructure);
   watch([selectedType, selectedPlatform], loadDropzoneStructure);
+  watch(droppedContainers, syncDynamicFieldsWithLayout, { deep: true });
 
   async function saveAndDeploy() {
     try {
@@ -1038,5 +1064,9 @@
 
   .shake {
     animation: shake 0.3s ease-in-out;
+  }
+
+  [draggable="true"] {
+    cursor: grab !important;
   }
 </style>
