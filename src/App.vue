@@ -147,6 +147,22 @@
         <template v-if="selectedPlatform === 'android'">
           <h3 class="font-semibold mb-2">Field Properties</h3>
           <div class="mb-2">
+            <label class="block text-sm font-medium">Label:</label>
+            <input
+              type="text"
+              class="mt-1 block w-full border rounded px-2 py-1"
+              v-model="selectedField.label.text"
+            />
+          </div>
+          <div class="mb-2">
+            <label class="block text-sm font-medium">Editor Type:</label>
+            <input
+              type="text"
+              class="mt-1 block w-full border rounded px-2 py-1"
+              v-model="selectedField.editorType"
+            />
+          </div>
+          <div class="mb-2">
             <label class="block text-sm font-medium">Size:</label>
             <input v-model="fieldProperties.size" type="number" class="mt-1 block w-full border rounded px-2 py-1" />
           </div>
@@ -468,7 +484,8 @@
       targetRow.items.push(createField());
 
       // Mark dynamic field as used
-      const matchingDynamic = dynamicFields.value.find(f => f.name === draggedItem.name);
+      const identifier = getFieldIdentifier(draggedItem);
+      const matchingDynamic = dynamicFields.value.find(f => getFieldIdentifier(f) === identifier);
       if (matchingDynamic) matchingDynamic.used = true;
     }
     else if (
@@ -596,6 +613,10 @@
       dynamicFields.value.push(...fieldsFromFile);
   });
 
+  function getFieldIdentifier(field) {
+    return field?.dataField || field?.name || field?.label?.text || null;
+  }
+
   function extractFieldsFromJSON(groups) {
     const items = [];
 
@@ -603,12 +624,13 @@
       if (Array.isArray(group.items)) {
         group.items.forEach(item => {
           if (item.itemType === 'empty') return;
-
+          const id = getFieldIdentifier(item) || "Unnamed Field";
           items.push({
-            name: item.label?.text || item.dataField || "Unnamed Field",
+            name: id,
             groupType: 'field',
             dataField: item.dataField,
             editorType: item.editorType,
+            label: { text:id },
             used: false
           });
         });
@@ -622,12 +644,8 @@
     structure.forEach(container => {
       (container.items || []).forEach(row => {
         (row.items || []).forEach(field => {
-          if (field.dataField) {
-            used.add(field.dataField);
-          } 
-          else if (field.label?.text) {
-            used.add(field.label.text);
-          }
+          const id = getFieldIdentifier(field);
+          if (id) used.add(id);
         })
       })
     })
@@ -637,9 +655,9 @@
   function syncDynamicFieldsWithLayout() {
     const fieldsFromFile = extractFieldsFromJSON(customFieldJSON);
     const usedFields = extractUsedFieldNames(droppedContainers.value);
-    dynamicFields.value = fieldsFromFile.filter(
-      field => !usedFields.has(field.dataField || field.label?.text)
-    );
+    dynamicFields.value = fieldsFromFile
+      .map(f => ({ ...f, used: false }))
+      .filter(field => !usedFields.has(getFieldIdentifier(field)));
   }
 
   const selectedField = ref(null);
