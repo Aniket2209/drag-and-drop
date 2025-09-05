@@ -63,6 +63,7 @@
             @dragover.stop.prevent="onDragOverRow(cIdx, rIdx, $event)"
             @drop.stop="onDropToRowOrSwap(cIdx, rIdx)"
             @dragleave="() => onDragLeaveRow(cIdx, rIdx)"
+            @click="onRowClick(child)"
             >
               {{  }}
               <div class="flex flex-wrap gap-1">
@@ -71,7 +72,7 @@
                 draggable = "true"
                 @dragstart="(e) => { e.stopPropagation(); onDragStart(field, fIdx, rIdx, cIdx); }"
                 @dragover.prevent
-                @click.prevent="onFieldClick(field)"
+                @click.stop="onFieldClick(field)"
                 >
                 <span
                   class="block truncate"
@@ -104,7 +105,6 @@
               type="text"
               class="mt-1 block w-full border border-gray-300 rounded px-2 py-1"
               v-model="selectedField.label.text"
-              disabled
             />
           </div>
           <div class="mb-2">
@@ -113,7 +113,6 @@
               type="text"
               class="mt-1 block w-full border border-gray-300 rounded px-2 py-1"
               v-model="selectedField.editorType"
-              disabled
             />
           </div>
           <div class="mb-2">
@@ -151,7 +150,7 @@
             <input
               type="text"
               class="mt-1 block w-full border rounded px-2 py-1"
-              v-model="selectedField.label.text"
+              v-model="fieldProperties.label.text"
             />
           </div>
           <div class="mb-2">
@@ -159,7 +158,7 @@
             <input
               type="text"
               class="mt-1 block w-full border rounded px-2 py-1"
-              v-model="selectedField.editorType"
+              v-model="fieldProperties.editorType"
             />
           </div>
           <div class="mb-2">
@@ -200,6 +199,103 @@
         >
           Apply
         </button>
+      </div>
+      <div v-if="selectedRow && selectedPlatform === 'android'" class="p-4 border rounded-lg shadow bg-white w-full">
+        <h3 class="text-lg font-semibold mb-4">Row Properties</h3>
+        <div class="space-y-3">
+          <!-- Common -->
+          <div>
+            <label class="block text-sm font-medium">Horizontal Align</label>
+            <select class="mt-1 block w-full border rounded px-2 py-1" v-model="rowProperties.horizontal_alignment">
+              <option value="start">Start</option>
+              <option value="center">Center</option>
+              <option value="end">End</option>
+            </select>
+          </div>
+
+          <div>
+            <fieldset class="block text-sm font-medium">
+              <legend>Padding</legend>
+              <div class="flex gap-2 mb-2">
+                <input v-model.number="rowProperties.padding_top" class="mt-1 block w-full border rounded px-2 py-1" type="number" placeholder="Top" />
+                <input v-model.number="rowProperties.padding_right" class="mt-1 block w-full border rounded px-2 py-1" type="number" placeholder="Right" />
+                <input v-model.number="rowProperties.padding_bottom" class="mt-1 block w-full border rounded px-2 py-1" type="number" placeholder="Bottom" />
+                <input v-model.number="rowProperties.padding_left" class="mt-1 block w-full border rounded px-2 py-1" type="number" placeholder="Left" />
+              </div>
+            </fieldset>
+          </div>
+
+          <!-- Specific: Non-template -->
+          <template v-if="rowProperties.editorType === 'displayTextInitials'">
+            <div>
+              <label class="block text-sm font-medium">Vertical Align</label>
+              <select class="mt-1 block w-full border rounded px-2 py-1" v-model="rowProperties.vertical_alignment">
+                <option value="top">Top</option>
+                <option value="center">Center</option>
+                <option value="bottom">Bottom</option>
+              </select>
+            </div>
+
+            <div class="flex gap-2 mb-2">
+              <div class="flex-1">
+                <label class="block text-sm font-medium">Size</label>
+                <input v-model.number="rowProperties.size" class="mt-1 block w-full border rounded px-2 py-1" type="number" />
+              </div>
+
+              <div class="flex-1">
+                <label class="block text-sm font-medium">Background Color</label>
+                <input v-model="rowProperties.bgColor" class="mt-1 block w-full border rounded px-2 py-1" type="color" />
+              </div>
+
+              <div class="flex-1">
+                <label class="block text-sm font-medium">Text Color</label>
+                <input v-model="rowProperties.textColor" class="mt-1 block w-full border rounded px-2 py-1" type="color" />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium">Icon</label>
+              <input v-model="rowProperties.icon" class="mt-1 block w-full border rounded px-2 py-1" type="text" />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium">Action Type</label>
+              <input v-model="rowProperties.actionType" class="mt-1 block w-full border rounded px-2 py-1" type="text" />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium">Action Destination</label>
+              <input v-model="rowProperties.actionDestination" class="mt-1 block w-full border rounded px-2 py-1" type="text" />
+            </div>
+          </template>
+
+          <!-- Specific: Template -->
+          <template v-else-if="rowProperties.editorType === 'group'">
+            <div>
+              <label class="block text-sm font-medium">Font Size</label>
+              <input v-model.number="rowProperties.font_size" class="mt-1 block w-full border rounded px-2 py-1" type="number" />
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium">Font Weight</label>
+              <select class="mt-1 block w-full border rounded px-2 py-1" v-model="rowProperties.font_weight">
+                <option value="normal">Normal</option>
+                <option value="semi-bold">Semi-Bold</option>
+                <option value="bold">Bold</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium">Text Align</label>
+              <select class="mt-1 block w-full border rounded px-2 py-1" v-model="rowProperties.text_align">
+                <option value="start">Start</option>
+                <option value="center">Center</option>
+                <option value="end">End</option>
+              </select>
+            </div>
+          </template>
+        </div>
+        <button class="mt-4 px-4 py-2 rounded bg-blue-500 text-white" @click="applyRowProperties">Apply</button>
       </div>
     </div>
   </div>
@@ -614,7 +710,7 @@
   });
 
   function getFieldIdentifier(field) {
-    return field?.dataField || field?.name || field?.label?.text || null;
+    return field?.label?.text || field?.name || field?.dataField || null;
   }
 
   function extractFieldsFromJSON(groups) {
@@ -676,16 +772,28 @@
 
   watch([selectedType, selectedPlatform], () => {
     selectedField.value = null;
+    selectedRow.value = null;
   });
 
   function onFieldClick(field)
   {
     selectedField.value = field;
+    selectedRow.value = null;
+
+    if (!field.label) {
+      field.label = { text:""};
+    }
+    
+    if (!field.editorType) {
+      field.editorType = "";
+    }
 
     fieldProperties.value = {
       width: field.width || '',
       required: !!field.required,
       readonly: !!field.readonly,
+      label: { text: field.label.text || "" },
+      editorType: field.editorType || "",
       size: field.size || '',
       font_size: field.font_size || '',
       padding_top: field.padding?.top ?? 0,
@@ -710,6 +818,8 @@
       delete selectedField.value.readonly;
     }
     if (selectedPlatform.value === "android") {
+      selectedField.value.label = { text: fieldProperties.value.label.text || "" };
+      selectedField.value.editorType = fieldProperties.value.editorType || "";
       if (selectedPlatform.value.size !== '') selectedField.value.size = Number(fieldProperties.value.size);
       else delete selectedField.value.size;
 
@@ -741,6 +851,81 @@
     }
 
     alert(`Field "${selectedField.value.label?.text}" updated successfully.`);
+  }
+
+  const selectedRow = ref(null)
+  const rowProperties = ref(null)
+  function onRowClick(row) {
+    selectedRow.value = row;
+    selectedField.value = null;
+
+    if (!row.label) row.label = { text: '' };
+
+    const base = {
+      editorType: row.editorType || "group",
+      label: row.label?.text || "",
+      horizontal_alignment: row.horizontal_alignment || "start",
+      padding_top: row.padding?.top ?? 0,
+      padding_right: row.padding?.right ?? 0,
+      padding_bottom: row.padding?.bottom ?? 0,
+      padding_left: row.padding?.left ?? 0,
+    };
+
+    if (row.editorType === "displayTextInitials") {
+      rowProperties.value = {
+        ...base,
+        vertical_alignment: row.vertical_alignment || "top",
+        size: row.size || 30,
+        bgColor: row.bgColor || "#FFFFFFFF",
+        textColor: row.textColor || "#FF000000",
+        icon: row.icon || null,
+        actionType: row.action?.type || null,
+        actionDestination: row.action?.destination || null,
+      };
+    } else if (row.editorType === "group") {
+      rowProperties.value = {
+        ...base,
+        font_size: row.font_size || 14,
+        font_weight: row.font_weight || "normal",
+        text_align: row.text_align || "start",
+      };
+    } else {
+      rowProperties.value = base; // fallback
+    }
+  }
+
+  function applyRowProperties() {
+    if (!selectedRow.value) return;
+
+    // Common
+    selectedRow.value.editorType = rowProperties.value.editorType;
+    selectedRow.value.label = { text: rowProperties.value.label };
+    selectedRow.value.horizontal_alignment = rowProperties.value.horizontal_alignment;
+    selectedRow.value.padding = {
+      top: rowProperties.value.padding_top,
+      right: rowProperties.value.padding_right,
+      bottom: rowProperties.value.padding_bottom,
+      left: rowProperties.value.padding_left,
+    };
+
+    // Type-specific
+    if (rowProperties.value.editorType === "displayTextInitials") {
+      selectedRow.value.vertical_alignment = rowProperties.value.vertical_alignment;
+      selectedRow.value.size = rowProperties.value.size;
+      selectedRow.value.bgColor = rowProperties.value.bgColor;
+      selectedRow.value.textColor = rowProperties.value.textColor;
+      selectedRow.value.icon = rowProperties.value.icon;
+      selectedRow.value.action = {
+        type: rowProperties.value.actionType,
+        destination: rowProperties.value.actionDestination,
+      };
+    } else if (rowProperties.value.editorType === "group") {
+      selectedRow.value.font_size = rowProperties.value.font_size;
+      selectedRow.value.font_weight = rowProperties.value.font_weight;
+      selectedRow.value.text_align = rowProperties.value.text_align;
+    }
+
+    alert("Row properties updated!");
   }
 
   axios.defaults.baseURL = 'http://127.0.0.1:8000';
